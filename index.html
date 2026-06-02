@@ -200,12 +200,16 @@ const INSTRUMENTS = {
 const GRADE_COLORS = { 'A+':'#34d399','A':'#34d399','B':'#fbbf24','C':'#fb923c','X':'#f87171' };
 const NAV_ITEMS = [
   { id:'home',      label:'Heute',    icon:'📋' },
+  { id:'analytics', label:'Analyse',  icon:'📊' },
   { id:'history',   label:'Verlauf',  icon:'📅' },
   { id:'playbook',  label:'Playbook', icon:'📓' },
   { id:'tools',     label:'Werkzeuge',icon:'🛡' },
   { id:'knowledge', label:'Wissen',   icon:'🧠' },
   { id:'roadmap',   label:'Weg',      icon:'🗺' },
 ];
+
+// Vordefinierte Setup-Tags (erweiterbar)
+const SETUP_TAGS = ['London Open','NY Open','Sweep','Continuation','Counter-Trend','Range','News','Reversal'];
 
 // ═══════════════════════════════════════════════════════════════
 // STATE
@@ -377,6 +381,7 @@ function renderContent() {
   const el = document.getElementById('content');
   const s = state.activeSection;
   if (s==='home')      el.innerHTML = renderHome();
+  if (s==='analytics') el.innerHTML = renderAnalytics();
   if (s==='history')   el.innerHTML = renderHistory();
   if (s==='playbook')  el.innerHTML = renderPlaybook();
   if (s==='tools')     el.innerHTML = renderTools();
@@ -669,6 +674,7 @@ function renderTradeRow(t, i) {
       </div>
     </div>
     ${!t.wasValidSBS?'<div style="font-size:11.5px;color:var(--loss);margin-top:4px">⚠ Forced Setup</div>':''}
+    ${t.tags?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${t.tags.split(',').filter(Boolean).map(tag=>`<span style="font-size:10px;padding:2px 7px;border-radius:99px;background:var(--acDim);color:var(--ac)">${tag}</span>`).join('')}</div>`:''}
     ${t.reflection?`<p style="font-size:12px;color:var(--txD);font-style:italic;margin-top:4px">"${t.reflection}"</p>`:''}
   </div>`;
 }
@@ -714,6 +720,15 @@ function renderTradeForm() {
         <select onchange="tfChange('grade',this.value)">${['A+','A','B','C','X'].map(g=>`<option ${tf.grade===g?'selected':''}>${g}</option>`).join('')}</select></div>
       <div><label class="label" style="font-size:11.5px;color:var(--txF)">Emotion</label>
         <select onchange="tfChange('emotion',this.value)">${['Neutral','Selbstsicher','Frustriert','FOMO','Müde','Gelangweilt','Gestresst'].map(o=>`<option ${tf.emotion===o?'selected':''}>${o}</option>`).join('')}</select></div>
+    </div>
+    <div>
+      <label class="label" style="font-size:11.5px;color:var(--txF)">Setup-Tags (mehrere möglich)</label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
+        ${SETUP_TAGS.map(tag=>{
+          const on = (tf.tags||[]).includes(tag);
+          return `<button onclick="tfToggleTag('${tag}')" style="padding:5px 11px;border-radius:99px;font-size:12px;font-weight:600;border:1px solid ${on?'var(--ac)':'var(--bd)'};background:${on?'var(--acDim)':'var(--surf)'};color:${on?'var(--ac)':'var(--txD)'}">${tag}</button>`;
+        }).join('')}
+      </div>
     </div>
     <div>
       <label class="label" style="font-size:13px;font-weight:600;color:var(--warn)">Kritische Frage: Vollständiges SBS?</label>
@@ -875,6 +890,232 @@ function renderDayDetail(date) {
     ${trades.map((t,i)=>renderTradeRow(t,i)).join('')}
     ${log.postTrading?.went_well?`<div style="font-size:12.5px;color:var(--txD)"><span style="color:var(--ac)">Gut:</span> ${log.postTrading.went_well}</div>`:''}
     ${log.postTrading?.didnt_work?`<div style="font-size:12.5px;color:var(--txD)"><span style="color:var(--loss)">Nicht gut:</span> ${log.postTrading.didnt_work}</div>`:''}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ANALYTICS — Edge-Analyse, Kennzahlen, Heatmap
+// ═══════════════════════════════════════════════════════════════
+function statsFor(trades) {
+  const n = trades.length;
+  if (n === 0) return null;
+  const rs = trades.map(t=>parseFloat(t.rMultiple)||0);
+  const wins = rs.filter(r=>r>0);
+  const losses = rs.filter(r=>r<0);
+  const grossWin = wins.reduce((s,r)=>s+r,0);
+  const grossLoss = Math.abs(losses.reduce((s,r)=>s+r,0));
+  const totalR = rs.reduce((s,r)=>s+r,0);
+  const winRate = wins.length/n;
+  const avgWin = wins.length?grossWin/wins.length:0;
+  const avgLoss = losses.length?grossLoss/losses.length:0;
+  // Expectancy = (WinRate × AvgWin) − (LossRate × AvgLoss)
+  const expectancy = winRate*avgWin - (1-winRate)*avgLoss;
+  const profitFactor = grossLoss>0 ? grossWin/grossLoss : (grossWin>0?Infinity:0);
+  return { n, totalR, winRate, avgWin, avgLoss, expectancy, profitFactor, wins:wins.length, losses:losses.length };
+}
+
+function groupBy(trades, keyFn) {
+  const groups = {};
+  trades.forEach(t=>{
+    const keys = keyFn(t);
+    (Array.isArray(keys)?keys:[keys]).forEach(k=>{
+      if(k===''||k==null) return;
+      (groups[k]=groups[k]||[]).push(t);
+    });
+  });
+  return groups;
+}
+
+function hourBlock(t) {
+  // Uhrzeit "HH:MM" → Block
+  const h = parseInt((t.time||'').split(':')[0]) || 0;
+  if (h<9) return 'Vor 09:00';
+  if (h<11) return '09–11';
+  if (h<13) return '11–13';
+  if (h<15) return '13–15';
+  return 'Nach 15:00';
+}
+
+function weekday(t) {
+  const d = new Date(t.date);
+  return ['So','Mo','Di','Mi','Do','Fr','Sa'][d.getDay()];
+}
+
+function renderAnalytics() {
+  let at = allTrades();
+  const activeTag = state.filterTag || null;
+  if (activeTag) at = at.filter(t=>(t.tags||'').split(',').includes(activeTag));
+
+  if (allTrades().length === 0) return `
+    <div class="gap-col">
+      <h2 style="font-size:22px;font-weight:700;letter-spacing:-.02em">Analyse</h2>
+      <div class="card" style="text-align:center;padding:40px;color:var(--txD);font-size:13px">Noch keine Trades. Sobald du loggst, baut sich hier deine komplette Edge-Analyse auf.</div>
+    </div>`;
+
+  const overall = statsFor(at);
+
+  // Alle Tags die in Trades vorkommen
+  const usedTags = [...new Set(allTrades().flatMap(t=>(t.tags||'').split(',').filter(Boolean)))];
+
+  const dimWeekday = groupBy(at, weekday);
+  const dimHour    = groupBy(at, hourBlock);
+  const dimSymbol  = groupBy(at, t=>t.symbol);
+  const dimTag     = groupBy(at, t=>(t.tags||'').split(',').filter(Boolean));
+
+  return `
+  <div class="gap-col">
+    <h2 style="font-size:22px;font-weight:700;letter-spacing:-.02em">Edge-Analyse</h2>
+
+    ${usedTags.length>0?`
+    <div>
+      <div style="font-size:11px;color:var(--txF);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Filter nach Setup-Tag</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        <button onclick="setFilterTag(null)" style="padding:5px 11px;border-radius:99px;font-size:12px;font-weight:600;border:1px solid ${!activeTag?'var(--ac)':'var(--bd)'};background:${!activeTag?'var(--acDim)':'var(--surf)'};color:${!activeTag?'var(--ac)':'var(--txD)'}">Alle (${allTrades().length})</button>
+        ${usedTags.map(tag=>`<button onclick="setFilterTag('${tag}')" style="padding:5px 11px;border-radius:99px;font-size:12px;font-weight:600;border:1px solid ${activeTag===tag?'var(--ac)':'var(--bd)'};background:${activeTag===tag?'var(--acDim)':'var(--surf)'};color:${activeTag===tag?'var(--ac)':'var(--txD)'}">${tag}</button>`).join('')}
+      </div>
+    </div>`:'<div class="card" style="font-size:12.5px;color:var(--txD);padding:14px">Tipp: Vergib beim Trade-Logging Setup-Tags (z.B. "London Open", "Sweep"). Dann kannst du hier nach ihnen filtern und siehst, welches Setup wirklich dein Edge ist.</div>'}
+
+    <!-- Kennzahlen -->
+    <div>
+      <div class="section-title">Kennzahlen${activeTag?` · ${activeTag}`:''}</div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Trades</div><div class="stat-value tnum">${overall.n}</div></div>
+        <div class="stat-card"><div class="stat-label">Win-Rate</div><div class="stat-value tnum" style="color:${overall.winRate>=0.5?'var(--win)':'var(--txD)'}">${Math.round(overall.winRate*100)}%</div></div>
+        <div class="stat-card"><div class="stat-label">Gesamt R</div><div class="stat-value tnum" style="color:${overall.totalR>=0?'var(--win)':'var(--loss)'}">${fmt(overall.totalR,1)}R</div></div>
+        <div class="stat-card"><div class="stat-label">Expectancy</div><div class="stat-value tnum" style="color:${overall.expectancy>=0?'var(--win)':'var(--loss)'}">${fmt(overall.expectancy,2)}R</div></div>
+        <div class="stat-card"><div class="stat-label">Profit Factor</div><div class="stat-value tnum" style="color:${overall.profitFactor>=1?'var(--win)':'var(--loss)'}">${overall.profitFactor===Infinity?'∞':overall.profitFactor.toFixed(2)}</div></div>
+        <div class="stat-card"><div class="stat-label">Ø Win / Ø Loss</div><div class="stat-value tnum" style="font-size:15px">${fmt(overall.avgWin,1)} / ${fmt(-overall.avgLoss,1)}</div></div>
+      </div>
+      <div class="surface" style="margin-top:10px;font-size:12px;color:var(--txD);line-height:1.6">
+        <strong style="color:var(--tx)">Lesehilfe:</strong> Expectancy ist dein Ø-Gewinn pro Trade in R — alles über 0 ist profitabel. Profit Factor über 1 = du verdienst mehr als du verlierst; über 1,5 ist solide, über 2 stark.
+      </div>
+    </div>
+
+    <!-- R-Verteilung -->
+    <div>
+      <div class="section-title">R-Verteilung</div>
+      ${renderRHistogram(at)}
+    </div>
+
+    <!-- Edge nach Dimensionen -->
+    ${renderEdgeTable('Nach Wochentag', dimWeekday, ['Mo','Di','Mi','Do','Fr'])}
+    ${renderEdgeTable('Nach Uhrzeit', dimHour, ['Vor 09:00','09–11','11–13','13–15','Nach 15:00'])}
+    ${renderEdgeTable('Nach Symbol', dimSymbol)}
+    ${Object.keys(dimTag).length>0?renderEdgeTable('Nach Setup-Tag', dimTag):''}
+
+    <!-- Heatmap -->
+    <div>
+      <div class="section-title">P&L-Heatmap</div>
+      ${renderHeatmap()}
+    </div>
+  </div>`;
+}
+
+function setFilterTag(tag) { state.filterTag = tag; render(); }
+
+function renderEdgeTable(title, groups, order) {
+  let keys = Object.keys(groups);
+  if (order) keys = order.filter(k=>groups[k]); else keys.sort((a,b)=>statsFor(groups[b]).totalR-statsFor(groups[a]).totalR);
+  if (keys.length===0) return '';
+  // bestes / schlechtestes hervorheben
+  const totals = keys.map(k=>({k,r:statsFor(groups[k]).totalR}));
+  const best = totals.reduce((a,b)=>b.r>a.r?b:a).k;
+  const worst = totals.reduce((a,b)=>b.r<a.r?b:a).k;
+  return `
+  <div>
+    <div class="section-title">${title}</div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="display:grid;grid-template-columns:1.3fr 0.7fr 0.8fr 1fr 1fr;gap:0;font-size:11px;color:var(--txF);padding:10px 14px;border-bottom:1px solid var(--bd);text-transform:uppercase;letter-spacing:.04em">
+        <span></span><span style="text-align:right">Trades</span><span style="text-align:right">Win%</span><span style="text-align:right">Gesamt R</span><span style="text-align:right">Expect.</span>
+      </div>
+      ${keys.map(k=>{
+        const s = statsFor(groups[k]);
+        const isBest = k===best && s.totalR>0;
+        const isWorst = k===worst && s.totalR<0 && keys.length>1;
+        return `<div style="display:grid;grid-template-columns:1.3fr 0.7fr 0.8fr 1fr 1fr;gap:0;font-size:13px;padding:10px 14px;border-bottom:1px solid var(--bd);align-items:center;background:${isBest?'rgba(52,211,153,.06)':isWorst?'rgba(248,113,113,.06)':'transparent'}">
+          <span style="font-weight:600;display:flex;align-items:center;gap:6px">${k}${isBest?'<span style="font-size:10px;color:var(--win)">▲ best</span>':''}${isWorst?'<span style="font-size:10px;color:var(--loss)">▼ worst</span>':''}</span>
+          <span class="tnum" style="text-align:right;color:var(--txD)">${s.n}</span>
+          <span class="tnum" style="text-align:right;color:${s.winRate>=0.5?'var(--win)':'var(--txD)'}">${Math.round(s.winRate*100)}%</span>
+          <span class="tnum" style="text-align:right;font-weight:700;color:${s.totalR>=0?'var(--win)':'var(--loss)'}">${fmt(s.totalR,1)}R</span>
+          <span class="tnum" style="text-align:right;color:${s.expectancy>=0?'var(--win)':'var(--loss)'}">${fmt(s.expectancy,2)}</span>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
+function renderRHistogram(trades) {
+  const buckets = { '≤−2':0,'−2…−1':0,'−1…0':0,'0…1':0,'1…2':0,'2…3':0,'≥3':0 };
+  trades.forEach(t=>{
+    const r = parseFloat(t.rMultiple)||0;
+    if(r<=-2) buckets['≤−2']++;
+    else if(r<-1) buckets['−2…−1']++;
+    else if(r<0) buckets['−1…0']++;
+    else if(r<1) buckets['0…1']++;
+    else if(r<2) buckets['1…2']++;
+    else if(r<3) buckets['2…3']++;
+    else buckets['≥3']++;
+  });
+  const max = Math.max(...Object.values(buckets),1);
+  return `
+  <div class="card">
+    <div style="display:flex;align-items:flex-end;gap:6px;height:120px">
+      ${Object.entries(buckets).map(([label,count])=>{
+        const isNeg = label.includes('−')&&!label.includes('…0')||label==='≤−2'||label==='−2…−1'||label==='−1…0';
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
+          <span class="tnum" style="font-size:11px;color:var(--txD);margin-bottom:4px">${count||''}</span>
+          <div style="width:100%;height:${(count/max)*88}px;min-height:${count>0?4:0}px;background:${isNeg?'var(--loss)':'var(--win)'};border-radius:4px 4px 0 0;transition:height .3s"></div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="display:flex;gap:6px;margin-top:6px">
+      ${Object.keys(buckets).map(label=>`<span style="flex:1;text-align:center;font-size:9.5px;color:var(--txF)">${label}</span>`).join('')}
+    </div>
+  </div>`;
+}
+
+function renderHeatmap() {
+  // P&L pro Tag → Kalender-Grid des aktuellen Monats
+  const now = state.calMonth || new Date();
+  const yr = now.getFullYear(), mo = now.getMonth();
+  const days = new Date(yr,mo+1,0).getDate();
+  const firstDay = new Date(yr,mo,1).getDay();
+  const off = firstDay===0?6:firstDay-1;
+  const mNames=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  // max abs R für Farbintensität
+  let maxAbs = 0.5;
+  Object.values(state.dailyLogs).forEach(log=>{
+    const r = (log.trades||[]).reduce((s,t)=>s+(parseFloat(t.rMultiple)||0),0);
+    maxAbs = Math.max(maxAbs, Math.abs(r));
+  });
+  return `
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <button class="btn btn-ghost btn-sm" onclick="calPrev()">←</button>
+      <h3 style="font-size:14px;font-weight:600">${mNames[mo]} ${yr}</h3>
+      <button class="btn btn-ghost btn-sm" onclick="calNext()">→</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px">
+      ${['Mo','Di','Mi','Do','Fr','Sa','So'].map(d=>`<div style="text-align:center;font-size:10px;color:var(--txF)">${d}</div>`).join('')}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">
+      ${Array(off).fill('<div></div>').join('')}
+      ${Array.from({length:days},(_,i)=>{
+        const day=i+1, date=`${yr}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const log=state.dailyLogs[date];
+        const r=(log?.trades||[]).reduce((s,t)=>s+(parseFloat(t.rMultiple)||0),0);
+        const has=(log?.trades||[]).length>0;
+        let bg='var(--surf2)';
+        if(has){
+          const intensity=Math.min(1,Math.abs(r)/maxAbs);
+          bg=r>=0?`rgba(52,211,153,${0.15+intensity*0.6})`:`rgba(248,113,113,${0.15+intensity*0.6})`;
+        }
+        return `<div title="${date}: ${fmt(r,1)}R" style="aspect-ratio:1;border-radius:6px;background:${bg};border:1px solid var(--bd);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2px">
+          <span class="tnum" style="font-size:10px;color:${has?'#fff':'var(--txF)'}">${day}</span>
+          ${has?`<span class="tnum" style="font-size:9px;color:#fff;font-weight:700">${fmt(r,1)}</span>`:''}
+        </div>`;
+      }).join('')}
+    </div>
   </div>`;
 }
 
@@ -1491,6 +1732,14 @@ function tfChange(key, val) {
   render();
 }
 
+function tfToggleTag(tag) {
+  const tf = state.tradeForm || {};
+  const tags = tf.tags || [];
+  tf.tags = tags.includes(tag) ? tags.filter(t=>t!==tag) : [...tags, tag];
+  state.tradeForm = tf;
+  render();
+}
+
 function submitTrade() {
   const tf = state.tradeForm||{};
   if(tf.wasValidSBS===null) return;
@@ -1503,7 +1752,8 @@ function submitTrade() {
   const trade = {
     ...tf, id: Date.now(),
     time: new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}),
-    rMultiple: rMult, pnl, riskEur, suggestedLots: sugLots
+    rMultiple: rMult, pnl, riskEur, suggestedLots: sugLots,
+    tags: (tf.tags||[]).join(',')
   };
   const log = todayLog();
   const trades = [...(log.trades||[]), trade];

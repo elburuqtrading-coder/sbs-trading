@@ -228,8 +228,16 @@ function showSync(on) {
 }
 
 async function apiGet(action) {
-  const r = await fetch(`${API_URL}?action=${action}`);
-  return r.json();
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 10000); // 10s Timeout
+  try {
+    const r = await fetch(`${API_URL}?action=${action}`, { signal: ctrl.signal });
+    clearTimeout(t);
+    return r.json();
+  } catch(e) {
+    clearTimeout(t);
+    throw e;
+  }
 }
 
 async function apiPost(action, data) {
@@ -1017,7 +1025,7 @@ function renderForcedSetups() {
     <div class="card">
       <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">Setup Verification Protocol (60 Sek)</h3>
       ${taskItem('force-0','Schritt 1: Zähle laut die 5 SBS-Punkte. Push · Pullback · Deeper Push · Sweep von 2 · Entry. Ein Punkt nicht klar — kein Trade.')}
-      ${taskItem('force-1','Schritt 2: Devil\\'s Advocate — "Was spricht GEGEN diesen Trade?" Mindestens zwei Gegenargumente. Findest du keine, bist du im Confirmation Bias.')}
+      ${taskItem('force-1','Schritt 2: Devils Advocate — "Was spricht GEGEN diesen Trade?" Mindestens zwei Gegenargumente. Findest du keine, bist du im Confirmation Bias.')}
       ${taskItem('force-2','Schritt 3: 60-Sekunden-Regel — Timer starten, kein Trade. Echte SBS-Setups verschwinden nicht in 60s. Forcings tun das.')}
     </div>
     <div class="card">
@@ -1226,7 +1234,7 @@ function renderScience() {
     {t:'Action Bias (Bar-Eli et al., 2007)',d:'Torhüter springen bei 94% der Elfmeter, obwohl Stehenbleiben statistisch besser wäre. Nichts-Tun fühlt sich falsch an. → Geduld als aktive Strategie'},
     {t:'Schlaf & Kognition (Walker, 2017)',d:'≤6 Stunden Schlaf senken kognitive Performance um ~30%. → Schlaf-Trigger im Morning Screening'},
     {t:'Physiological Sigh (Balban et al., 2023)',d:'Stanford, Cell Reports: zyklisches Seufzen reduziert Stress-Marker schneller als jede andere Atemtechnik. → schnellster Reset nach Loss'},
-    {t:'Confirmation Bias (Wason, 1960)',d:'Das Gehirn sucht Bestätigung statt Widerlegung. Auf M1 gibt es für jede These ein Signal. → Devil\\'s-Advocate-Schritt im Setup-Check'},
+    {t:'Confirmation Bias (Wason, 1960)',d:'Das Gehirn sucht Bestätigung statt Widerlegung. Auf M1 gibt es für jede These ein Signal. → Devils-Advocate-Schritt im Setup-Check'},
     {t:'Habit & Identity (Clear, 2018)',d:'Verhalten folgt Identität. Wer sich als "Trader" definiert, fühlt Handlungsdruck. → Identity Reframe zu "Setup-Wartender"'},
   ];
   return `

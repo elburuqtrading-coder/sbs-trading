@@ -201,6 +201,7 @@ const GRADE_COLORS = { 'A+':'#34d399','A':'#34d399','B':'#fbbf24','C':'#fb923c',
 const NAV_ITEMS = [
   { id:'home',      label:'Heute',    icon:'📋' },
   { id:'history',   label:'Verlauf',  icon:'📅' },
+  { id:'playbook',  label:'Playbook', icon:'📓' },
   { id:'tools',     label:'Werkzeuge',icon:'🛡' },
   { id:'knowledge', label:'Wissen',   icon:'🧠' },
   { id:'roadmap',   label:'Weg',      icon:'🗺' },
@@ -248,17 +249,30 @@ async function loadAll() {
   try {
     const d = await apiGet('getAll');
     if (d.logs)     state.dailyLogs = d.logs;
-    if (d.settings) state.account   = { ...state.account, ...d.settings };
+    if (d.settings) {
+      state.account = { ...state.account, ...d.settings };
+      if (d.settings.playbook) state.playbook = d.settings.playbook;
+    }
   } catch(e) {
     console.warn('Google Sheets nicht erreichbar, arbeite lokal:', e);
   }
 }
 
-async function saveLog(date, log) {
+async function saveLog(date, log, immediate) {
   state.dailyLogs[date] = log;
   render();
-  await apiPost('saveLog', { date, log });
+  if (immediate) {
+    if (logSaveTimer) { clearTimeout(logSaveTimer); logSaveTimer = null; }
+    await apiPost('saveLog', { date, log });
+  } else {
+    if (logSaveTimer) clearTimeout(logSaveTimer);
+    logSaveTimer = setTimeout(() => {
+      apiPost('saveLog', { date, log });
+      logSaveTimer = null;
+    }, 1500);
+  }
 }
+let logSaveTimer = null;
 
 async function saveTrade(trade) {
   await apiPost('saveTrade', trade);
@@ -356,6 +370,7 @@ function renderContent() {
   const s = state.activeSection;
   if (s==='home')      el.innerHTML = renderHome();
   if (s==='history')   el.innerHTML = renderHistory();
+  if (s==='playbook')  el.innerHTML = renderPlaybook();
   if (s==='tools')     el.innerHTML = renderTools();
   if (s==='knowledge') el.innerHTML = renderKnowledge();
   if (s==='roadmap')   el.innerHTML = renderRoadmap();
@@ -856,6 +871,103 @@ function renderDayDetail(date) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// PLAYBOOK
+// ═══════════════════════════════════════════════════════════════
+function renderPlaybook() {
+  const at = allTrades();
+  const valid = at.filter(t=>t.wasValidSBS);
+  const aPlus = valid.filter(t=>(t.grade==='A+'||t.grade==='A') && (parseFloat(t.rMultiple)||0)>0);
+  const entries = state.playbook || [];
+
+  const bestSymbol = {};
+  valid.forEach(t=>{ bestSymbol[t.symbol]=(bestSymbol[t.symbol]||0)+(parseFloat(t.rMultiple)||0); });
+  const symbolRank = Object.entries(bestSymbol).sort((a,b)=>b[1]-a[1]);
+
+  return `
+  <div class="gap-col">
+    <h2 style="font-size:22px;font-weight:700;letter-spacing:-.02em">Trading Playbook</h2>
+    <div class="banner banner-accent">
+      <div style="font-size:16px;font-weight:500;margin-bottom:6px">Dein persönliches SBS-Playbook</div>
+      <p style="font-size:13px;color:var(--txD);line-height:1.6">Aus deinen dokumentierten Trades entsteht dein Edge in Schriftform. Oben automatisch: was statistisch für dich funktioniert. Unten dein manuelles Playbook — die Setups, die du wieder und wieder traden willst.</p>
+    </div>
+
+    <div>
+      <div class="section-title">Was bei dir funktioniert (auto)</div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Valide SBS-Trades</div><div class="stat-value tnum">${valid.length}</div></div>
+        <div class="stat-card"><div class="stat-label">A/A+ Gewinner</div><div class="stat-value tnum" style="color:var(--win)">${aPlus.length}</div></div>
+        <div class="stat-card"><div class="stat-label">Bestes Symbol</div><div class="stat-value tnum" style="font-size:16px;color:var(--ac)">${symbolRank[0]?symbolRank[0][0]:'—'}</div></div>
+      </div>
+      ${symbolRank.length>0?`
+      <div class="card" style="margin-top:12px">
+        <h3 style="font-size:13.5px;font-weight:600;margin-bottom:10px">R pro Symbol (nur valide SBS)</h3>
+        ${symbolRank.map(([sym,r])=>`
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--bd)">
+            <span class="tnum" style="font-size:13.5px;font-weight:600">${sym}</span>
+            <span class="tnum" style="font-size:13.5px;font-weight:700;color:${r>=0?'var(--win)':'var(--loss)'}">${fmt(r,1)}R</span>
+          </div>`).join('')}
+      </div>`:'<div class="card" style="text-align:center;padding:24px;color:var(--txD);font-size:13px">Sobald du valide SBS-Trades loggst, erscheint hier deine Symbol-Statistik.</div>'}
+    </div>
+
+    <div>
+      <div class="section-title">Mein Playbook</div>
+      <div class="card gap-col">
+        <h3 style="font-size:14px;font-weight:600">Neues Setup eintragen</h3>
+        <div><label class="label" style="font-size:11.5px;color:var(--ac)">Setup-Name</label><input id="pb-name" placeholder="z.B. London Open Long Sweep"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><label class="label" style="font-size:11.5px;color:var(--ac)">Symbol</label>
+            <select id="pb-symbol">${Object.keys(INSTRUMENTS).map(k=>`<option>${k}</option>`).join('')}</select></div>
+          <div><label class="label" style="font-size:11.5px;color:var(--ac)">Richtung</label>
+            <select id="pb-dir"><option>Buy</option><option>Sell</option></select></div>
+        </div>
+        <div><label class="label" style="font-size:11.5px;color:var(--ac)">Kontext / Bedingung</label><textarea id="pb-context" rows="2" placeholder="Wann tritt dieses Setup auf? Welche Marktphase?"></textarea></div>
+        <div><label class="label" style="font-size:11.5px;color:var(--ac)">SBS-Trigger (die 5 Punkte)</label><textarea id="pb-trigger" rows="3" placeholder="Wie sieht die Push→Pullback→Deeper Push→Sweep→Entry Sequenz konkret aus?"></textarea></div>
+        <div><label class="label" style="font-size:11.5px;color:var(--ac)">Entry · Stop · Ziel</label><input id="pb-entry" placeholder="Entry nach Sweep, SL hinter Punkt 3, Ziel 2R"></div>
+        <div><label class="label" style="font-size:11.5px;color:var(--ac)">Invalidierung (wann KEIN Trade)</label><textarea id="pb-invalid" rows="2" placeholder="Was disqualifiziert dieses Setup?"></textarea></div>
+        <button class="btn btn-primary btn-full" onclick="savePlaybook()">Setup speichern</button>
+      </div>
+    </div>
+
+    ${entries.length>0?`
+    <div class="gap-col">
+      ${[...entries].reverse().map(e=>`
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <h3 style="font-size:15px;font-weight:700">${e.name}</h3>
+              <span class="tnum" style="font-size:12px;color:var(--ac)">${e.symbol}</span>
+              <span style="font-size:12px;font-weight:600;color:${e.dir==='Buy'?'var(--ac)':'#fb923c'}">${e.dir}</span>
+            </div>
+            <button class="btn btn-sm btn-ghost" onclick="deletePlaybook(${e.id})" style="padding:4px 8px;font-size:12px">✕</button>
+          </div>
+          ${e.context?`<div style="margin-bottom:8px"><div style="font-size:10.5px;color:var(--txF);text-transform:uppercase;letter-spacing:.06em">Kontext</div><div style="font-size:13px;color:var(--txD);line-height:1.5">${e.context}</div></div>`:''}
+          ${e.trigger?`<div style="margin-bottom:8px"><div style="font-size:10.5px;color:var(--ac);text-transform:uppercase;letter-spacing:.06em">SBS-Trigger</div><div style="font-size:13px;color:var(--txD);line-height:1.5">${e.trigger}</div></div>`:''}
+          ${e.entry?`<div style="margin-bottom:8px"><div style="font-size:10.5px;color:var(--txF);text-transform:uppercase;letter-spacing:.06em">Entry · Stop · Ziel</div><div style="font-size:13px;color:var(--txD);line-height:1.5">${e.entry}</div></div>`:''}
+          ${e.invalid?`<div><div style="font-size:10.5px;color:var(--loss);text-transform:uppercase;letter-spacing:.06em">Invalidierung</div><div style="font-size:13px;color:var(--txD);line-height:1.5">${e.invalid}</div></div>`:''}
+        </div>`).join('')}
+    </div>`:''}
+  </div>`;
+}
+
+function savePlaybook() {
+  const get = id => (document.getElementById(id)?.value||'');
+  const name = get('pb-name');
+  if(!name) { alert('Bitte mindestens einen Setup-Namen eingeben.'); return; }
+  state.playbook = state.playbook||[];
+  state.playbook.push({ id:Date.now(), name,
+    symbol:get('pb-symbol'), dir:get('pb-dir'), context:get('pb-context'),
+    trigger:get('pb-trigger'), entry:get('pb-entry'), invalid:get('pb-invalid') });
+  apiPost('saveSettings', { ...state.account, playbook: state.playbook });
+  render();
+}
+
+function deletePlaybook(id) {
+  if(!confirm('Setup löschen?')) return;
+  state.playbook = (state.playbook||[]).filter(e=>e.id!==id);
+  render();
+}
+
+// ═══════════════════════════════════════════════════════════════
 // TOOLS (kompakt)
 // ═══════════════════════════════════════════════════════════════
 function renderTools() {
@@ -864,12 +976,13 @@ function renderTools() {
   <div class="gap-col">
     <h2 style="font-size:22px;font-weight:700;letter-spacing:-.02em">Werkzeuge</h2>
     <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">
-      ${[['forced','Forced Setups'],['revenge','Revenge'],['boredom','Boredom'],['protocols','Protokolle'],['breath','Atmen']].map(([id,label])=>`
+      ${[['forced','Forced Setups'],['revenge','Revenge'],['boredom','Boredom'],['layer','5-Layer'],['protocols','Protokolle'],['breath','Atmen']].map(([id,label])=>`
         <button class="nav-tab ${tab===id?'active':''}" onclick="setToolsTab('${id}')">${label}</button>`).join('')}
     </div>
     ${tab==='forced'    ? renderForcedSetups()   : ''}
     ${tab==='revenge'   ? renderRevenge()        : ''}
     ${tab==='boredom'   ? renderBoredom()        : ''}
+    ${tab==='layer'     ? renderLayerTool()      : ''}
     ${tab==='protocols' ? renderProtocols()      : ''}
     ${tab==='breath'    ? renderBreath()         : ''}
   </div>`;
@@ -878,18 +991,41 @@ function renderTools() {
 function setToolsTab(t) { state.toolsTab=t; render(); }
 
 function renderForcedSetups() {
+  const mechanisms = [
+    {t:'Confirmation Bias (Wason 1960)',d:'Dein Gehirn sucht Bestätigung, nicht Widerlegung. Auf M1 gibt es immer ein Signal, das deine These stützt. Such aktiv nach Gegenargumenten.'},
+    {t:'Action Bias (Bar-Eli 2007)',d:'Torhüter springen bei 94% der Elfmeter zur Seite, obwohl Stehenbleiben besser wäre. Nichts-Tun fühlt sich falsch an, ist aber oft richtig.'},
+    {t:'Sunk Cost Fallacy',d:'Du hast eine Stunde auf den Markt geschaut. Nicht zu traden fühlt sich an, als wäre die Zeit umsonst. Ist sie nicht — ein schlechter Trade macht sie nicht wertvoll.'},
+    {t:'Dopamine Anticipation (Schultz 1998)',d:'Dopamin wird in der Erwartung ausgeschüttet, nicht bei der Belohnung. Der Trade fühlt sich gut an — unabhängig vom Ausgang.'},
+    {t:'Identity Threat',d:'"Ich bin Trader" → wenn du nicht tradest, fühlst du dich wie keiner. Reframe: Du bist "Setup-Wartender". Der wartet 99% der Zeit. Das ist der Job.'},
+  ];
   return `
   <div class="gap-col">
-    <div class="banner banner-accent">
+    <div class="banner banner-danger">
       <div style="font-size:16px;font-weight:500;margin-bottom:6px">Forced Setups — die unsichtbare Falle</div>
-      <p style="font-size:13px;color:var(--txD);line-height:1.6">Du siehst etwas, das fast wie dein Setup aussieht, weißt im Hinterkopf, dass es nicht passt, und gehst trotzdem rein. Forcing ist kein Charakterfehler — es ist das Ergebnis von fünf gleichzeitig aktiven kognitiven Mechanismen.</p>
+      <p style="font-size:13px;color:var(--txD);line-height:1.6">Das gefährlichste Verhalten ist nicht Revenge — es ist Forcing. Du siehst etwas, das fast wie dein Setup aussieht, weißt im Hinterkopf dass es nicht passt, und gehst trotzdem rein. Forcing ist kein Charakterfehler, sondern fünf gleichzeitig aktive kognitive Mechanismen.</p>
+    </div>
+    <div class="card">
+      <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">Warum du forcierst — die Mechanik</h3>
+      <div class="gap-col" style="gap:8px">
+        ${mechanisms.map((m,i)=>`
+          <div class="surface" style="border-color:rgba(251,191,36,.2)">
+            <div style="font-size:13px;font-weight:600;color:var(--warn);margin-bottom:4px">${i+1}. ${m.t}</div>
+            <p style="font-size:12px;color:var(--txD);line-height:1.55;margin:0">${m.d}</p>
+          </div>`).join('')}
+      </div>
     </div>
     <div class="card">
       <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">Setup Verification Protocol (60 Sek)</h3>
-      ${['Zähle laut die 5 SBS-Punkte. Ein Punkt nicht klar zeigbar — kein Trade.',
-         'Devil\'s Advocate: "Was spricht GEGEN diesen Trade?" Mindestens zwei Gegenargumente.',
-         '60-Sekunden-Regel: Timer starten, kein Trade. Echte Setups verschwinden nicht in 60s.'
-      ].map((s,i)=>taskItem(`force-${i}`,`Schritt ${i+1}: ${s}`)).join('')}
+      ${taskItem('force-0','Schritt 1: Zähle laut die 5 SBS-Punkte. Push · Pullback · Deeper Push · Sweep von 2 · Entry. Ein Punkt nicht klar — kein Trade.')}
+      ${taskItem('force-1','Schritt 2: Devil\\'s Advocate — "Was spricht GEGEN diesen Trade?" Mindestens zwei Gegenargumente. Findest du keine, bist du im Confirmation Bias.')}
+      ${taskItem('force-2','Schritt 3: 60-Sekunden-Regel — Timer starten, kein Trade. Echte SBS-Setups verschwinden nicht in 60s. Forcings tun das.')}
+    </div>
+    <div class="card">
+      <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">Identity Reframe</h3>
+      <div class="surface" style="border-color:rgba(45,212,191,.25)">
+        <p style="font-size:13px;margin:0 0 8px"><span style="color:var(--loss)">Alt:</span> "Ich bin Trader. Trader handeln."</p>
+        <p style="font-size:13px;margin:0"><span style="color:var(--win)">Neu:</span> "Ich bin Setup-Wartender. Ich warte auf vollständige SBS-Sequenzen. Mein Erfolg misst sich am Warten."</p>
+      </div>
     </div>
     <div class="card">
       <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">Wenn-Dann-Skripte</h3>
@@ -901,6 +1037,50 @@ function renderForcedSetups() {
       ])}
     </div>
   </div>`;
+}
+
+function renderLayerTool() {
+  const reductions = state.reductions || [];
+  return `
+  <div class="gap-col">
+    <div class="banner banner-win">
+      <div style="font-size:16px;font-weight:500;margin-bottom:6px">5-Layer Reduction Method</div>
+      <p style="font-size:13px;color:var(--txD);line-height:1.6">Jedes massive Problem enthält ein winziges, lösbares Problem. Diese Methode findet es. Schäl ein Problem Schicht für Schicht bis zum konkreten nächsten Schritt.</p>
+    </div>
+    <div class="card gap-col">
+      <h3 style="font-size:15px;font-weight:600">Neue Reduktion</h3>
+      <div><label class="label" style="font-size:11.5px;color:var(--ac)">Problem</label><input id="lay-problem" placeholder="z.B. Ich forciere Setups"></div>
+      <div><label class="label" style="font-size:11.5px;color:var(--ac)">Layer 1: State the Monster</label><textarea id="lay-monster" rows="2" placeholder="Roh und unzensiert"></textarea></div>
+      <div><label class="label" style="font-size:11.5px;color:var(--ac)">Layer 2: Strip the Emotion</label><textarea id="lay-emotion" rows="2" placeholder="Nur Fakten"></textarea></div>
+      <div><label class="label" style="font-size:11.5px;color:var(--ac)">Layer 3: Find the Fork</label><input id="lay-fork" placeholder="EINE Entscheidung"></div>
+      <div><label class="label" style="font-size:11.5px;color:var(--ac)">Layer 4: Name the Core</label><input id="lay-core" placeholder="Ein Wort"></div>
+      <div><label class="label" style="font-size:11.5px;color:var(--ac)">Layer 5: Define the Action</label><input id="lay-action" placeholder="Konkreter nächster Schritt"></div>
+      <button class="btn btn-primary btn-full" onclick="saveReduction()">Speichern</button>
+    </div>
+    ${reductions.length>0?`
+    <div class="card">
+      <h3 style="font-size:15px;font-weight:600;margin-bottom:12px">Deine Reduktionen</h3>
+      <div class="gap-col" style="gap:10px">
+        ${[...reductions].reverse().map(r=>`
+          <div class="surface">
+            <div style="font-size:13.5px;font-weight:600;color:var(--ac)">${r.problem}</div>
+            <div style="font-size:11px;color:var(--txF);margin-bottom:8px">${new Date(r.date).toLocaleDateString('de-DE')}</div>
+            <div style="font-size:13px"><span style="color:var(--txF)">Core:</span> <strong>${r.core||'—'}</strong></div>
+            <div style="font-size:13px"><span style="color:var(--txF)">Action:</span> ${r.action||'—'}</div>
+          </div>`).join('')}
+      </div>
+    </div>`:''}
+  </div>`;
+}
+
+function saveReduction() {
+  const get = id => (document.getElementById(id)?.value||'');
+  const problem = get('lay-problem'), action = get('lay-action');
+  if(!problem||!action) { alert('Bitte mindestens Problem und Action ausfüllen.'); return; }
+  state.reductions = state.reductions||[];
+  state.reductions.push({ id:Date.now(), date:new Date().toISOString(), problem,
+    monster:get('lay-monster'), emotion:get('lay-emotion'), fork:get('lay-fork'), core:get('lay-core'), action });
+  render();
 }
 
 function renderRevenge() {
@@ -1040,11 +1220,14 @@ function renderDiscipline() {
 
 function renderScience() {
   const studies = [
-    {t:'Expressive Writing (Pennebaker, 1997)',d:'15–20 Min freies Schreiben über drei Wochen verbessert mentale Gesundheit messbar. → Evening Reflection'},
-    {t:'Implementation Intentions (Gollwitzer, 1999)',d:'Meta-Analyse 94 Studien: Wenn-Dann-Pläne verdoppeln die Erfolgsrate. → Morning & Evening Intentionen'},
-    {t:'Dopamin & Anticipation (Schultz, 1998)',d:'Dopamin in der Erwartung, nicht bei der Belohnung. Peak klingt nach 15–20 Min ab. → 20-Min-Regel'},
-    {t:'Action Bias (Bar-Eli, 2007)',d:'Nichts-Tun fühlt sich falsch an, auch wenn es richtig ist. → Geduld als aktive Strategie'},
-    {t:'Physiological Sigh (Balban, 2023)',d:'Stanford Cell Reports: Schnellste Stress-Reduktion aller Atemtechniken. → Pre-Entry & Post-Loss'},
+    {t:'Expressive Writing (Pennebaker, 1997)',d:'Meta-Analyse 13 Studien: 15–20 Min freies Schreiben über drei Wochen verbessert mentale Gesundheit messbar und nachhaltig. → Evening Reflection'},
+    {t:'Implementation Intentions (Gollwitzer, 1999)',d:'Meta-Analyse 94 Studien: konkrete Wenn-Dann-Pläne verdoppeln die Erfolgsrate gegenüber allgemeinen Vorsätzen. → Morning & Evening Intentionen'},
+    {t:'Dopamin & Anticipation (Schultz, 1998/2016)',d:'Dopamin in der Erwartung, nicht bei der Belohnung. Peak klingt nach 15–20 Min ab. → 20-Minuten-Regel'},
+    {t:'Action Bias (Bar-Eli et al., 2007)',d:'Torhüter springen bei 94% der Elfmeter, obwohl Stehenbleiben statistisch besser wäre. Nichts-Tun fühlt sich falsch an. → Geduld als aktive Strategie'},
+    {t:'Schlaf & Kognition (Walker, 2017)',d:'≤6 Stunden Schlaf senken kognitive Performance um ~30%. → Schlaf-Trigger im Morning Screening'},
+    {t:'Physiological Sigh (Balban et al., 2023)',d:'Stanford, Cell Reports: zyklisches Seufzen reduziert Stress-Marker schneller als jede andere Atemtechnik. → schnellster Reset nach Loss'},
+    {t:'Confirmation Bias (Wason, 1960)',d:'Das Gehirn sucht Bestätigung statt Widerlegung. Auf M1 gibt es für jede These ein Signal. → Devil\\'s-Advocate-Schritt im Setup-Check'},
+    {t:'Habit & Identity (Clear, 2018)',d:'Verhalten folgt Identität. Wer sich als "Trader" definiert, fühlt Handlungsdruck. → Identity Reframe zu "Setup-Wartender"'},
   ];
   return `
   <div class="gap-col">
@@ -1234,7 +1417,7 @@ function completeMorning() {
     alert('Bitte Schlaf, Stress, Energie und Intention ausfüllen.');
     return;
   }
-  saveLog(today(), { ...log, morning, morningDone: true });
+  saveLog(today(), { ...log, morning, morningDone: true }, true);
 }
 
 function completePreTrading() {
@@ -1246,7 +1429,7 @@ function completePreTrading() {
     alert('Bitte alle Clarity-Check-Fragen und das erwartete Setup ausfüllen.');
     return;
   }
-  saveLog(today(), { ...log, preTrading: pre, preTradingDone: true });
+  saveLog(today(), { ...log, preTrading: pre, preTradingDone: true }, true);
 }
 
 function selectGrade(g) {
@@ -1269,7 +1452,7 @@ function completePostTrading() {
     alert('Bitte alle Felder und den Grade ausfüllen.');
     return;
   }
-  saveLog(today(), { ...log, postTrading: post, postTradingDone: true });
+  saveLog(today(), { ...log, postTrading: post, postTradingDone: true }, true);
 }
 
 function completeEvening() {
@@ -1285,7 +1468,7 @@ function completeEvening() {
     alert('Bitte Writing, Dankbarkeit und Intention ausfüllen.');
     return;
   }
-  saveLog(today(), { ...log, evening, eveningDone: true });
+  saveLog(today(), { ...log, evening, eveningDone: true }, true);
 }
 
 // Trade Form
@@ -1316,7 +1499,7 @@ function submitTrade() {
   };
   const log = todayLog();
   const trades = [...(log.trades||[]), trade];
-  saveLog(today(), { ...log, trades });
+  saveLog(today(), { ...log, trades }, true);
   saveTrade(trade);
   state.showTradeForm = false;
   state.tradeForm = null;

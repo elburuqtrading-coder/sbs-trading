@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SBS Stoic Trader</title>
+<!-- ══════════════════════════════════════════════
+     ⚠  SCHRITT 1: Deine Apps Script URL eintragen
+     ══════════════════════════════════════════════ -->
+<script>
+  const API_URL = 'https://script.google.com/macros/s/AKfycbw_laSyxz1P8jCCbDRe2HaSDLmV8lEUHSf7P4UYgTiEKJCA8Z-7GPUUghNilLh8lFWR/exec';
+</script>
+
+<style>
+  :root {
+    --bg:      #0a0e14;
+    --surf:    #11161f;
+    --surf2:   #161c27;
+    --bd:      rgba(148,163,184,0.12);
+    --bdS:     rgba(148,163,184,0.22);
+    --tx:      #e2e8f0;
+    --txD:     #94a3b8;
+    --txF:     #64748b;
+    --ac:      #2dd4bf;
+    --acDim:   rgba(45,212,191,0.12);
+    --win:     #34d399;
+    --loss:    #f87171;
+    --warn:    #fbbf24;
+    --warnDim: rgba(251,191,36,0.10);
+    --danger:  #ef4444;
+    --danDim:  rgba(239,68,68,0.10);
+    --mono: 'JetBrains Mono','SF Mono',ui-monospace,monospace;
+    --sans: 'Inter',-apple-system,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased;margin:0;padding:0}
+  body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100vh}
+  input,select,textarea{font-family:var(--sans);background:var(--surf2);border:1px solid var(--bd);border-radius:8px;padding:9px 12px;color:var(--tx);font-size:13px;width:100%}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 3px var(--acDim)}
+  button{cursor:pointer;font-family:var(--sans);border:none;transition:all .18s}
+  ::-webkit-scrollbar{width:6px;height:6px}
+  ::-webkit-scrollbar-thumb{background:var(--bdS);border-radius:99px}
+  .tnum{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+  /* Layout */
+  #app{display:flex;flex-direction:column;min-height:100vh}
+  #header{background:rgba(10,14,20,.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:20;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  #nav{border-bottom:1px solid var(--bd);background:rgba(17,22,31,.8);overflow-x:auto}
+  #nav-inner{display:flex;gap:4px;padding:10px 16px;max-width:1080px;margin:0 auto}
+  #content{max-width:1080px;margin:0 auto;padding:24px 16px 100px;width:100%;flex:1}
+
+  /* Cards */
+  .card{background:var(--surf);border:1px solid var(--bd);border-radius:14px;padding:20px}
+  .card.accent{border-color:rgba(45,212,191,.35)}
+  .surface{background:var(--surf2);border:1px solid var(--bd);border-radius:10px;padding:13px}
+
+  /* Buttons */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:10px;font-weight:600;font-size:13.5px;padding:10px 18px}
+  .btn-primary{background:var(--ac);color:#04111a}
+  .btn-ghost{background:var(--surf2);color:var(--tx);border:1px solid var(--bd)}
+  .btn-success{background:var(--win);color:#04130c}
+  .btn-danger{background:var(--danDim);color:var(--loss);border:1px solid rgba(239,68,68,.35)}
+  .btn-subtle{background:transparent;color:var(--txD)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn-full{width:100%}
+  .btn-sm{padding:7px 13px;font-size:12.5px}
+
+  /* Nav tab */
+  .nav-tab{display:flex;align-items:center;gap:6px;padding:8px 15px;border-radius:99px;font-size:13px;font-weight:600;white-space:nowrap;border:1px solid transparent;color:var(--txD);background:transparent;transition:all .18s}
+  .nav-tab.active{color:var(--ac);background:var(--acDim);border-color:rgba(45,212,191,.35)}
+
+  /* Phase tabs */
+  .phase-tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+  .phase-tab{padding:12px 4px;border-radius:11px;display:flex;flex-direction:column;align-items:center;gap:5px;border:1px solid var(--bd);background:var(--surf);font-size:11.5px;font-weight:600;color:var(--txD);transition:all .18s}
+  .phase-tab.active{color:var(--ac);background:var(--acDim);border-color:rgba(45,212,191,.5)}
+  .phase-tab.done{border-color:rgba(52,211,153,.35);color:var(--win)}
+
+  /* Stats grid */
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
+  .stat-card{background:var(--surf2);border:1px solid var(--bd);border-radius:10px;padding:12px 14px}
+  .stat-label{font-size:10.5px;color:var(--txF);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+  .stat-value{font-size:20px;font-weight:600;font-family:var(--mono)}
+
+  /* Scale field */
+  .scale-btns{display:flex;gap:4px;margin-top:6px}
+  .scale-btn{flex:1;aspect-ratio:1;border-radius:7px;border:1px solid var(--bd);background:var(--surf2);color:var(--txD);font-weight:600;font-size:12px;font-family:var(--mono);transition:all .15s}
+  .scale-btn.active{background:var(--ac);border-color:var(--ac);color:#04111a}
+
+  /* Yes/No */
+  .yn-btns{display:flex;gap:8px;margin-top:6px}
+  .yn-btn{flex:1;padding:9px;border-radius:9px;font-weight:600;font-size:13px;border:1px solid var(--bd);background:var(--surf2);color:var(--txD);transition:all .15s}
+  .yn-btn.yes.active{border-color:var(--win);background:rgba(52,211,153,.15);color:var(--win)}
+  .yn-btn.no.active{border-color:var(--loss);background:rgba(248,113,113,.1);color:var(--loss)}
+
+  /* Grade buttons */
+  .grade-btns{display:flex;gap:8px;margin-top:6px}
+  .grade-btn{flex:1;padding:11px;border-radius:9px;font-weight:700;font-size:14px;font-family:var(--mono);border:1px solid var(--bd);background:var(--surf2);color:var(--txD);transition:all .15s}
+
+  /* Task item */
+  .task-item{width:100%;display:flex;align-items:flex-start;gap:10px;text-align:left;background:var(--surf2);border:1px solid var(--bd);border-radius:9px;padding:11px 13px;transition:all .18s}
+  .task-item.checked{border-color:rgba(45,212,191,.35)}
+  .task-check{width:18px;height:18px;border-radius:5px;flex-shrink:0;margin-top:1px;border:1.5px solid var(--bdS);background:transparent;display:flex;align-items:center;justify-content:center;transition:all .15s}
+  .task-check.checked{background:var(--ac);border-color:var(--ac)}
+
+  /* Progress bar */
+  .progress-bar{height:10px;background:var(--surf2);border-radius:99px;overflow:hidden}
+  .progress-fill{height:100%;border-radius:99px;transition:width .4s ease}
+
+  /* Banner */
+  .banner{border-radius:14px;padding:18px}
+  .banner-accent{background:var(--acDim);border:1px solid rgba(45,212,191,.35)}
+  .banner-warn{background:var(--warnDim);border:1px solid rgba(251,191,36,.35)}
+  .banner-danger{background:var(--danDim);border:1px solid rgba(239,68,68,.45)}
+  .banner-win{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.35)}
+
+  /* Trade row */
+  .trade-row{border:1px solid var(--bd);background:var(--surf2);border-radius:10px;padding:12px}
+  .trade-row.forced{border-color:rgba(239,68,68,.4);background:var(--danDim)}
+
+  /* Utility */
+  .label{font-size:13.5px;font-weight:500;display:block;margin-bottom:3px}
+  .sub-label{font-size:11.5px;color:var(--txF);line-height:1.5;margin:0 0 8px}
+  .gap-col{display:flex;flex-direction:column;gap:16px}
+  .gap-row{display:flex;gap:12px;flex-wrap:wrap}
+  .section-title{font-size:13px;font-weight:600;color:var(--txD);text-transform:uppercase;letter-spacing:.08em;margin:0 0 10px}
+  .loading-overlay{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:100;font-size:14px;color:var(--txD)}
+  .spinner{width:32px;height:32px;border:3px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .sync-indicator{font-size:11px;color:var(--ac);display:flex;align-items:center;gap:5px}
+  .sync-dot{width:6px;height:6px;border-radius:50%;background:var(--ac);animation:pulse 1.5s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  @media(max-width:600px){
+    #content{padding:16px 12px 90px}
+    .phase-tabs{grid-template-columns:repeat(5,1fr)}
+    .stats-grid{grid-template-columns:repeat(2,1fr)}
+  }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading-overlay" class="loading-overlay">
+  <div class="spinner"></div>
+  <span>Lade Daten aus Google Sheets…</span>
+</div>
+
+<div id="app" style="display:none">
+  <div id="header">
+    <div style="display:flex;align-items:center;gap:11px">
+      <div style="width:34px;height:34px;border-radius:9px;background:var(--acDim);border:1px solid rgba(45,212,191,.35);display:flex;align-items:center;justify-content:center;font-size:16px">📈</div>
+      <div>
+        <h1 style="font-size:15px;font-weight:700;letter-spacing:-.02em">SBS Stoic Trader</h1>
+        <p style="font-size:10.5px;color:var(--txF);text-transform:uppercase;letter-spacing:.12em">Daily Documentation</p>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span id="sync-status" class="sync-indicator" style="display:none">
+        <span class="sync-dot"></span>Syncing…
+      </span>
+      <span id="header-stage" style="font-size:10.5px;font-weight:700;color:var(--ac);padding:5px 10px;border-radius:8px;background:var(--acDim);border:1px solid rgba(45,212,191,.35)">DEMO</span>
+      <button class="btn btn-ghost btn-sm" onclick="toggleSettings()">⚙</button>
+    </div>
+  </div>
+
+  <!-- Settings Panel -->
+  <div id="settings-panel" style="display:none;background:var(--surf);border-bottom:1px solid var(--bd);padding:16px;max-width:1080px;width:100%;margin:0 auto">
+    <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:14px">
+      <div id="stage-btns-container"></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px">
+        <div><label class="label" style="font-size:11.5px;color:var(--txF)">Account (€)</label><input type="number" id="set-size" onchange="onSettingChange()"></div>
+        <div><label class="label" style="font-size:11.5px;color:var(--txF)">Daily Loss %</label><input type="number" step="0.5" id="set-daily" onchange="onSettingChange()"></div>
+        <div><label class="label" style="font-size:11.5px;color:var(--txF)">Max Loss %</label><input type="number" step="0.5" id="set-max" onchange="onSettingChange()"></div>
+        <div><label class="label" style="font-size:11.5px;color:var(--txF)">Target %</label><input type="number" step="0.5" id="set-target" onchange="onSettingChange()"></div>
+      </div>
+      <p id="stage-note" style="font-size:11.5px;color:var(--txF);line-height:1.5"></p>
+    </div>
+  </div>
+
+  <div id="nav"><div id="nav-inner"></div></div>
+  <div id="content"></div>
+</div>
+
+<!-- Quick Action FAB -->
+<button id="fab" onclick="fabToggle()" style="position:fixed;bottom:24px;right:24px;z-index:30;width:56px;height:56px;border-radius:50%;background:var(--ac);color:#04111a;font-size:26px;font-weight:700;box-shadow:0 8px 24px rgba(45,212,191,.3);transition:transform .3s;display:none">+</button>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════
+const STAGE_DEFAULTS = {
+  demo:       { key:'demo',       label:'Demo / Üben',       short:'DEMO', dailyLossPct:5,  maxLossPct:10, profitTargetPct:8,  note:'Demo mit echten Challenge-Limits.' },
+  challenge1: { key:'challenge1', label:'Challenge Phase 1', short:'P1',   dailyLossPct:5,  maxLossPct:10, profitTargetPct:8,  note:'Phase 1 — Target erreichen ohne Limit zu reißen.' },
+  challenge2: { key:'challenge2', label:'Challenge Phase 2', short:'P2',   dailyLossPct:5,  maxLossPct:10, profitTargetPct:5,  note:'Phase 2 — niedrigeres Target, gleiche Limits.' },
+  funded:     { key:'funded',     label:'Funded',             short:'LIVE', dailyLossPct:5,  maxLossPct:10, profitTargetPct:0,  note:'Echtes Kapital. Einziger Job: Account behalten.' },
+};
+const INSTRUMENTS = {
+  XAUUSD: { pipSize:0.1,    pipValuePerLot:10 },
+  EURUSD: { pipSize:0.0001, pipValuePerLot:10 },
+  GBPUSD: { pipSize:0.0001, pipValuePerLot:10 },
+};
+const GRADE_COLORS = { 'A+':'#34d399','A':'#34d399','B':'#fbbf24','C':'#fb923c','X':'#f87171' };
+const NAV_ITEMS = [
+  { id:'home',      label:'Heute',    icon:'📋' },
+  { id:'history',   label:'Verlauf',  icon:'📅' },
+  { id:'tools',     label:'Werkzeuge',icon:'🛡' },
+  { id:'knowledge', label:'Wissen',   icon:'🧠' },
+  { id:'roadmap',   label:'Weg',      icon:'🗺' },
+];
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+let state = {
+  dailyLogs: {},
+  account: { size:100000, stage:'demo', rules:{ dailyLossPct:5, maxLossPct:10, profitTargetPct:8 } },
+  activeSection: 'home',
+  tasks: {},
+  syncing: false,
+};
+
+// ═══════════════════════════════════════════════════════════════
+// API
+// ═══════════════════════════════════════════════════════════════
+function showSync(on) {
+  const el = document.getElementById('sync-status');
+  if (el) el.style.display = on ? 'flex' : 'none';
+  state.syncing = on;
+}
+
+async function apiGet(action) {
+  const r = await fetch(`${API_URL}?action=${action}`);
+  return r.json();
+}
+
+async function apiPost(action, data) {
+  showSync(true);
+  try {
+    const r = await fetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action, data }),
+    });
+    return r.json();
+  } finally {
+    showSync(false);
+  }
+}
+
+async function loadAll() {
+  try {
+    const d = await apiGet('getAll');
+    if (d.logs)     state.dailyLogs = d.logs;
+    if (d.settings) state.account   = { ...state.account, ...d.settings };
+  } catch(e) {
+    console.warn('Google Sheets nicht erreichbar, arbeite lokal:', e);
+  }
+}
+
+async function saveLog(date, log) {
+  state.dailyLogs[date] = log;
+  render();
+  await apiPost('saveLog', { date, log });
+}
+
+async function saveTrade(trade) {
+  await apiPost('saveTrade', trade);
+}
+
+async function deleteTradeRemote(id) {
+  await apiPost('deleteTrade', { id });
+}
+
+async function saveSettings(account) {
+  state.account = account;
+  updateHeaderStage();
+  await apiPost('saveSettings', account);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
+function today() { return new Date().toISOString().split('T')[0]; }
+function todayLog() { return state.dailyLogs[today()] || { trades:[] }; }
+
+function allTrades() {
+  return Object.entries(state.dailyLogs).flatMap(([date, log]) =>
+    (log.trades||[]).map(t => ({ ...t, date }))
+  );
+}
+
+function calcCompletion(log) {
+  const f = ['morningDone','preTradingDone','postTradingDone','eveningDone'];
+  return Math.round(f.filter(k => log[k]).length / f.length * 100);
+}
+
+function calcDrawdown() {
+  const { account, dailyLogs } = state;
+  const size = account.size || 100000;
+  const td = today();
+  const todayPnl = (dailyLogs[td]?.trades||[]).reduce((s,t) => s+(parseFloat(t.pnl)||0), 0);
+  const totalPnl = Object.values(dailyLogs).reduce((s, log) => s+(log.trades||[]).reduce((ss,t) => ss+(parseFloat(t.pnl)||0),0), 0);
+  const dailyLimit = size * (account.rules.dailyLossPct/100);
+  const maxLimit   = size * (account.rules.maxLossPct/100);
+  const dailyUsed  = todayPnl < 0 ? Math.abs(todayPnl) : 0;
+  const maxUsed    = totalPnl < 0 ? Math.abs(totalPnl) : 0;
+  const dailyPct   = dailyLimit > 0 ? Math.min(100, dailyUsed/dailyLimit*100) : 0;
+  const maxPct     = maxLimit   > 0 ? Math.min(100, maxUsed/maxLimit*100)   : 0;
+  const dailyBlocked = dailyUsed >= dailyLimit;
+  const maxBlocked   = maxUsed   >= maxLimit;
+  const blocked      = dailyBlocked || maxBlocked;
+  const tightPct     = Math.max(dailyPct, maxPct);
+  const zone = blocked ? 'blocked' : tightPct >= 70 ? 'danger' : tightPct >= 40 ? 'warn' : 'safe';
+  const targetEur = size * (account.rules.profitTargetPct/100);
+  const targetPct = targetEur > 0 ? Math.min(100, Math.max(0, totalPnl/targetEur*100)) : 0;
+  return { dailyLimit, maxLimit, dailyUsed, maxUsed, dailyPct, maxPct,
+    dailyRemaining: Math.max(0, dailyLimit-dailyUsed),
+    maxRemaining:   Math.max(0, maxLimit-maxUsed),
+    dailyBlocked, maxBlocked, blocked, zone,
+    targetEur, totalPnl, targetPct };
+}
+
+function fmt(n, digits=2) { return (n>=0?'+':'')+parseFloat(n).toFixed(digits); }
+function fmtEur(n) { return (n>=0?'+':'')+Math.round(n)+'€'; }
+function gradeColor(g) { return GRADE_COLORS[g]||'#94a3b8'; }
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER CORE
+// ═══════════════════════════════════════════════════════════════
+function render() {
+  renderNav();
+  renderContent();
+  updateHeaderStage();
+}
+
+function renderNav() {
+  const el = document.getElementById('nav-inner');
+  el.innerHTML = NAV_ITEMS.map(n => `
+    <button class="nav-tab ${state.activeSection===n.id?'active':''}" onclick="setSection('${n.id}')">
+      ${n.icon} ${n.label}
+    </button>
+  `).join('');
+}
+
+function setSection(id) {
+  state.activeSection = id;
+  render();
+}
+
+function updateHeaderStage() {
+  const s = STAGE_DEFAULTS[state.account.stage] || STAGE_DEFAULTS.demo;
+  const el = document.getElementById('header-stage');
+  if(el) el.textContent = s.short;
+  syncSettingsPanel();
+}
+
+function renderContent() {
+  const el = document.getElementById('content');
+  const s = state.activeSection;
+  if (s==='home')      el.innerHTML = renderHome();
+  if (s==='history')   el.innerHTML = renderHistory();
+  if (s==='tools')     el.innerHTML = renderTools();
+  if (s==='knowledge') el.innerHTML = renderKnowledge();
+  if (s==='roadmap')   el.innerHTML = renderRoadmap();
+  attachEvents();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════════════════════
+function toggleSettings() {
+  const p = document.getElementById('settings-panel');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+  if (p.style.display === 'block') syncSettingsPanel();
+}
+
+function syncSettingsPanel() {
+  const a = state.account;
+  const sz = document.getElementById('set-size');   if(sz) sz.value = a.size;
+  const sd = document.getElementById('set-daily');  if(sd) sd.value = a.rules.dailyLossPct;
+  const sm = document.getElementById('set-max');    if(sm) sm.value = a.rules.maxLossPct;
+  const st = document.getElementById('set-target'); if(st) st.value = a.rules.profitTargetPct;
+  const c  = document.getElementById('stage-btns-container');
+  if(c) c.innerHTML = `
+    <label class="label" style="font-size:11.5px;color:var(--txF)">Account-Stufe</label>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+      ${Object.values(STAGE_DEFAULTS).map(s => `
+        <button class="btn btn-sm ${a.stage===s.key?'btn-primary':'btn-ghost'}" onclick="changeStage('${s.key}')">${s.label}</button>
+      `).join('')}
+    </div>`;
+  const note = document.getElementById('stage-note');
+  if(note) note.textContent = (STAGE_DEFAULTS[a.stage]||STAGE_DEFAULTS.demo).note;
+}
+
+function onSettingChange() {
+  const a = state.account;
+  a.size = parseFloat(document.getElementById('set-size').value)||100000;
+  a.rules.dailyLossPct = parseFloat(document.getElementById('set-daily').value)||5;
+  a.rules.maxLossPct   = parseFloat(document.getElementById('set-max').value)||10;
+  a.rules.profitTargetPct = parseFloat(document.getElementById('set-target').value)||0;
+  saveSettings(a);
+}
+
+function changeStage(key) {
+  const s = STAGE_DEFAULTS[key];
+  if(!s) return;
+  state.account.stage = key;
+  state.account.rules = { dailyLossPct: s.dailyLossPct, maxLossPct: s.maxLossPct, profitTargetPct: s.profitTargetPct };
+  saveSettings(state.account);
+  syncSettingsPanel();
+  render();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HOME
+// ═══════════════════════════════════════════════════════════════
+function renderHome() {
+  const log = todayLog();
+  const dd  = calcDrawdown();
+  const trades = log.trades||[];
+  const hour = new Date().getHours();
+  const phases = ['morning','preTrading','trades','postTrading','evening'];
+  const phaseDone = { morning:log.morningDone, preTrading:log.preTradingDone, trades:trades.length>0, postTrading:log.postTradingDone, evening:log.eveningDone };
+  const active = state.activePhase || (hour<9?'morning':hour<13?'preTrading':hour<17?'postTrading':'evening');
+
+  return `
+  <div class="gap-col">
+    <div>
+      <h2 style="font-size:22px;font-weight:700;letter-spacing:-.02em">Today's Log</h2>
+      <p style="font-size:12.5px;color:var(--txF);margin-top:2px">${new Date().toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'})}</p>
+    </div>
+
+    ${renderSmartBanner(log, dd)}
+    ${renderDdCockpit(dd)}
+
+    <!-- Phase Tabs -->
+    <div class="phase-tabs">
+      ${[
+        {id:'morning',label:'Morning',icon:'🌅'},
+        {id:'preTrading',label:'Pre',icon:'👁'},
+        {id:'trades',label:'Trades',icon:'📊'},
+        {id:'postTrading',label:'Post',icon:'📝'},
+        {id:'evening',label:'Evening',icon:'🌙'},
+      ].map(p => `
+        <button class="phase-tab ${active===p.id?'active':''} ${phaseDone[p.id]?'done':''}" onclick="setPhase('${p.id}')">
+          <span style="font-size:18px">${p.icon}</span>
+          <span>${p.label}</span>
+          ${phaseDone[p.id]?'<span style="font-size:11px;color:var(--win)">✓</span>':''}
+        </button>
+      `).join('')}
+    </div>
+
+    ${active==='morning'    ? renderMorning(log)     : ''}
+    ${active==='preTrading' ? renderPreTrading(log)  : ''}
+    ${active==='trades'     ? renderTradesPhase(log, dd) : ''}
+    ${active==='postTrading'? renderPostTrading(log) : ''}
+    ${active==='evening'    ? renderEvening(log)     : ''}
+  </div>`;
+}
+
+function setPhase(p) {
+  state.activePhase = p;
+  render();
+}
+
+function renderSmartBanner(log, dd) {
+  const phases = [
+    {id:'morning',label:'Morning Registration',done:log.morningDone},
+    {id:'preTrading',label:'Pre-Trading Check',done:log.preTradingDone},
+    {id:'trades',label:'Trades dokumentieren',done:(log.trades||[]).length>0},
+    {id:'postTrading',label:'Post-Trading Review',done:log.postTradingDone},
+    {id:'evening',label:'Evening Reflection',done:log.eveningDone},
+  ];
+  const allDone = phases.every(p=>p.done);
+  const next = phases.find(p=>!p.done)||phases[4];
+  const triggers = Object.values(log.morning?.triggers||{}).filter(Boolean).length;
+  return `
+  <div class="card accent" style="position:relative">
+    <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.14em;color:var(--ac);font-weight:700;margin-bottom:10px">${allDone?'Tag komplett':'Jetzt dran'}</div>
+    ${allDone ? `
+      <h3 style="font-size:18px;font-weight:700;color:var(--win)">Alle Phasen erledigt</h3>
+      <p style="font-size:13.5px;color:var(--txD);margin-top:4px">Heute vollständig dokumentiert.</p>
+    ` : `
+      <div style="display:flex;align-items:center;gap:13px">
+        <div style="flex:1">
+          <h3 style="font-size:17px;font-weight:700">${next.label}</h3>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="setPhase('${next.id}')">Start</button>
+      </div>
+    `}
+    ${dd.blocked?`<div class="banner banner-danger" style="margin-top:14px;display:flex;gap:8px;align-items:flex-start"><span>🔒</span><span style="font-size:12.5px"><strong>Trading gesperrt.</strong> ${dd.dailyBlocked?'Tageslimit':'Max-Drawdown'} erreicht. Post-Trading-Phase aufrufen.</span></div>`:''}
+    ${!dd.blocked&&dd.zone==='danger'?`<div class="banner banner-warn" style="margin-top:14px;font-size:12.5px;color:var(--warn)"><strong>Gefahrenzone.</strong> Noch ${Math.round(dd.dailyRemaining)}€ Tagespuffer. Nur A+-Setups oder aufhören.</div>`:''}
+    ${triggers>0&&!dd.blocked?`<div class="banner banner-danger" style="margin-top:14px;font-size:12.5px;color:var(--loss)"><strong>${triggers} Trigger aktiv.</strong> Trading heute nicht empfohlen.</div>`:''}
+    <div style="display:flex;gap:5px;margin-top:16px">
+      ${phases.map(p=>`<div style="flex:1;height:3px;border-radius:99px;background:${p.done?'var(--win)':'var(--bd)'}"></div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function renderDdCockpit(dd) {
+  const zc = dd.zone==='blocked'?'var(--danger)':dd.zone==='danger'?'var(--loss)':dd.zone==='warn'?'var(--warn)':'var(--win)';
+  const bar = (pct, label, used, limit) => `
+    <div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+        <span style="font-size:12px;color:var(--txD)">${label}</span>
+        <span class="tnum" style="font-size:12px;color:var(--txF)">−${Math.round(used)}€ / ${Math.round(limit)}€</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${pct>=70?'var(--loss)':pct>=40?'var(--warn)':'var(--win)'}"></div></div>
+      <div style="display:flex;justify-content:space-between;margin-top:4px">
+        <span class="tnum" style="font-size:10.5px;color:var(--txF)">${Math.round(pct)}% ausgeschöpft</span>
+        <span class="tnum" style="font-size:10.5px;color:var(--txF)">noch ${Math.round(limit-used)}€</span>
+      </div>
+    </div>`;
+  return `
+  <div class="card" style="border-color:${zc}40">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:8px">🛡 <h3 style="font-size:15px;font-weight:600">Limit-Wächter</h3></div>
+      <span style="font-size:11.5px;font-weight:600;color:${zc};padding:4px 9px;border-radius:7px;background:${zc}18">${STAGE_DEFAULTS[state.account.stage]?.label||'DEMO'}</span>
+    </div>
+    <div class="gap-col">
+      ${bar(dd.dailyPct,'Tagesverlust-Limit',dd.dailyUsed,dd.dailyLimit)}
+      ${bar(dd.maxPct,'Gesamt-Drawdown-Limit',dd.maxUsed,dd.maxLimit)}
+      ${dd.targetEur>0?`
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+          <span style="font-size:12px;color:var(--txD)">Profit-Ziel</span>
+          <span class="tnum" style="font-size:12px;color:var(--txF)">${Math.round(dd.totalPnl)}€ / ${Math.round(dd.targetEur)}€</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${dd.targetPct}%;background:var(--ac)"></div></div>
+      </div>`:'' }
+    </div>
+    <div style="margin-top:14px;padding:11px;border-radius:9px;background:${zc}14;border:1px solid ${zc}30;font-size:12.5px;color:${zc};font-weight:600">
+      ${{blocked:'🔒 Limit erreicht — Trading gesperrt',danger:'⚠ Gefahrenzone — defensiv bleiben',warn:'⚠ Achtung — Puffer schrumpft',safe:'✓ Im sicheren Bereich'}[dd.zone]}
+    </div>
+  </div>`;
+}
+
+// MORNING
+function renderMorning(log) {
+  const m = log.morning||{};
+  const triggers = [
+    {id:'streit',text:'Streit mit einer wichtigen Person in den letzten 12h'},
+    {id:'schlaf',text:'Weniger als 6h geschlafen'},
+    {id:'business',text:'Akutes Problem im Bauträger-Business'},
+    {id:'loss',text:'Der Verlust vom Vortag beschäftigt mich noch'},
+    {id:'zwang',text:'Gefühl, heute UNBEDINGT etwas machen zu müssen'},
+  ];
+  const anyTrigger = Object.values(m.triggers||{}).some(Boolean);
+  return `
+  <div class="card gap-col">
+    <div><h3 style="font-size:17px;font-weight:700">🌅 Morning Registration <span style="font-size:11.5px;color:var(--txF)">5–7 Min</span></h3>
+      <p style="font-size:13px;color:var(--txD);line-height:1.6;margin-top:6px">Self-monitoring ist der einzige zuverlässige Prediktor für Verhaltensänderung. Ohne diese Baseline kann dein Trading nicht im Kontext deiner Verfassung bewertet werden.</p>
+    </div>
+    ${scaleField('Schlafqualität',m.sleep,'morning-sleep','Schlafqualität wirkt direkt auf PFC-Funktion. ≤6h senken Performance um ~30%.','Furchtbar','Sehr gut')}
+    ${scaleField('Stresslevel',m.stress,'morning-stress','Cortisol ist das stärkste Hormon, das Trading-Entscheidungen sabotiert.','Ruhig','Maximal')}
+    ${scaleField('Energie',m.energy,'morning-energy','Energy ≠ Motivation. Trading braucht beides.','Erschöpft','Voll')}
+    <div>
+      <label class="label">Tagesintention <span class="sub-label" style="display:inline;margin:0"> — eine Sache</span></label>
+      <input id="morning-intention" value="${m.intention||''}" placeholder="Heute fokussiere ich mich auf…">
+    </div>
+    <div class="surface" style="border-color:rgba(251,191,36,.2)">
+      <div style="font-size:13.5px;font-weight:600;margin-bottom:8px;color:var(--warn)">⚠ Trigger-Screening</div>
+      <p class="sub-label">Schon ein aktiver Trigger = erhöhtes Cortisol, eingeschränkter PFC.</p>
+      <div class="gap-col" style="gap:8px">
+        ${triggers.map(t=>`
+          <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;font-size:13px;line-height:1.45">
+            <input type="checkbox" id="trigger-${t.id}" ${m.triggers?.[t.id]?'checked':''} onchange="onMorningChange()" style="width:auto;margin-top:2px;accent-color:var(--danger)">
+            ${t.text}
+          </label>`).join('')}
+      </div>
+      ${anyTrigger?`<div style="margin-top:12px;padding:11px;background:var(--danDim);border:1px solid rgba(239,68,68,.35);border-radius:8px;font-size:12.5px;color:var(--loss)"><strong>Empfehlung:</strong> Heute kein Trading empfohlen.</div>`:''}
+    </div>
+    <div>
+      <label class="label">Implementation Intention</label>
+      <p class="sub-label">Wenn-Dann (Gollwitzer 1999 — verdoppelt Erfolgsrate)</p>
+      <input id="morning-intention2" value="${m.intention2||''}" placeholder="Wenn ___, dann ___">
+    </div>
+    <button class="btn btn-full ${log.morningDone?'btn-ghost':'btn-success'}" onclick="completeMorning()">
+      ${log.morningDone?'✓ Morning abgeschlossen':'Morning abschließen'}
+    </button>
+  </div>`;
+}
+
+// PRE-TRADING
+function renderPreTrading(log) {
+  const p = log.preTrading||{};
+  return `
+  <div class="card gap-col">
+    <h3 style="font-size:17px;font-weight:700">👁 Pre-Trading Registration</h3>
+    <div class="surface" style="border-color:rgba(45,212,191,.2)">
+      <div style="font-size:13.5px;font-weight:600;margin-bottom:6px">Clarity Check</div>
+      ${ynField('Bin ich klar über die aktuelle Marktphase?','pre-q1',p.q1)}
+      ${ynField('Bin ich ruhig — nicht reaktiv oder emotional?','pre-q2',p.q2)}
+      ${ynField('Ist das Setup mein Setup — nicht FOMO oder Boredom?','pre-q3',p.q3)}
+      ${(p.q1&&p.q2&&p.q3)?`<div class="banner ${(p.q1==='yes'&&p.q2==='yes'&&p.q3==='yes')?'banner-win':'banner-danger'}" style="margin-top:10px;font-size:12.5px;color:${(p.q1==='yes'&&p.q2==='yes'&&p.q3==='yes')?'var(--win)':'var(--loss)'}">
+        ${(p.q1==='yes'&&p.q2==='yes'&&p.q3==='yes')?'<strong>Alle drei Ja.</strong> Du bist trading-fähig.':'<strong>Mindestens eine Nein.</strong> Heute kein Trading.'}
+      </div>`:''}
+    </div>
+    <div>
+      <label class="label">Erwartetes Setup heute</label>
+      <p class="sub-label">Vor dem ersten Chart aufschreiben (Pre-Mortem, Klein 2007)</p>
+      <textarea id="pre-expected" rows="3" placeholder="Heute erwarte ich…">${p.expectedSetup||''}</textarea>
+    </div>
+    ${ynField('Box Breathing heute Morgen gemacht?','pre-breath',p.breathDone)}
+    <button class="btn btn-full ${log.preTradingDone?'btn-ghost':'btn-success'}" onclick="completePreTrading()">
+      ${log.preTradingDone?'✓ Pre-Trading abgeschlossen':'Pre-Trading abschließen'}
+    </button>
+  </div>`;
+}
+
+// TRADES PHASE
+function renderTradesPhase(log, dd) {
+  const trades = log.trades||[];
+  const totalR = trades.reduce((s,t)=>s+(parseFloat(t.rMultiple)||0),0);
+  const totalPL = trades.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
+  const forced = trades.filter(t=>!t.wasValidSBS).length;
+  const locked = dd.blocked || trades.length >= 2;
+  return `
+  <div class="card gap-col">
+    <h3 style="font-size:17px;font-weight:700">📊 Trade Logging</h3>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">Trades</div><div class="stat-value tnum" style="color:${trades.length>2?'var(--loss)':'var(--tx)'}">${trades.length}/2</div></div>
+      <div class="stat-card"><div class="stat-label">Ergebnis</div><div class="stat-value tnum" style="color:${totalR>=0?'var(--win)':'var(--loss)'}">${fmt(totalR)}R</div></div>
+      <div class="stat-card"><div class="stat-label">P&L</div><div class="stat-value tnum" style="color:${totalPL>=0?'var(--win)':'var(--loss)'}">${fmtEur(totalPL)}</div></div>
+      <div class="stat-card"><div class="stat-label">Forced</div><div class="stat-value tnum" style="color:${forced===0?'var(--win)':'var(--loss)'}">${forced}</div></div>
+    </div>
+    ${dd.blocked?`<div class="banner banner-danger" style="display:flex;gap:10px;font-size:12.5px;color:var(--loss)">🔒 <div><strong>Trading gesperrt.</strong><br><span style="color:var(--txD)">Das ist der Reflex, der den Account rettet. Für heute ist Schluss.</span></div></div>`:''}
+    ${!dd.blocked&&trades.length>=2?`<div class="banner banner-warn" style="font-size:12.5px;color:var(--warn)"><strong>2 Trades erreicht.</strong> Trading-Tag beendet.</div>`:''}
+    ${state.showTradeForm&&!locked ? renderTradeForm() : `<button class="btn btn-primary btn-full" ${locked?'disabled':''} onclick="toggleTradeForm()">${locked?'🔒 Trading gesperrt':'+ Neuen Trade dokumentieren'}</button>`}
+    ${trades.map((t,i)=>renderTradeRow(t,i)).join('')}
+  </div>`;
+}
+
+function renderTradeRow(t, i) {
+  const r = parseFloat(t.rMultiple)||0;
+  return `
+  <div class="trade-row ${!t.wasValidSBS?'forced':''}">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="tnum" style="font-size:11.5px;color:var(--txF)">${t.time||''}</span>
+        <span class="tnum" style="font-size:13.5px;font-weight:600">${t.symbol||''}</span>
+        <span style="font-size:12.5px;font-weight:600;color:${t.direction==='Buy'?'var(--ac)':'#fb923c'}">${t.direction||''}</span>
+        <span style="font-size:11px;padding:2px 7px;border-radius:5px;background:${gradeColor(t.grade)}22;color:${gradeColor(t.grade)};font-weight:600">${t.grade||''}</span>
+        <span style="font-size:11.5px;color:var(--txF)">${t.emotion||''}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="tnum" style="font-size:14px;font-weight:700;color:${r>=0?'var(--win)':'var(--loss)'}">${fmt(r)}R</span>
+        <button class="btn btn-sm btn-ghost" onclick="removeTrade(${t.id})" style="padding:5px 8px;font-size:12px">✕</button>
+      </div>
+    </div>
+    ${!t.wasValidSBS?'<div style="font-size:11.5px;color:var(--loss);margin-top:4px">⚠ Forced Setup</div>':''}
+    ${t.reflection?`<p style="font-size:12px;color:var(--txD);font-style:italic;margin-top:4px">"${t.reflection}"</p>`:''}
+  </div>`;
+}
+
+function renderTradeForm() {
+  const tf = state.tradeForm||{ symbol:'XAUUSD', direction:'Buy', riskPct:1, slPips:'', outcome:'win', rResult:'', grade:'A', emotion:'Neutral', wasValidSBS:null, reflection:'' };
+  const inst = INSTRUMENTS[tf.symbol]||INSTRUMENTS.EURUSD;
+  const riskEur = (state.account.size||100000)*(tf.riskPct/100);
+  const sl = parseFloat(tf.slPips)||0;
+  const sugLots = sl > 0 ? (riskEur/(sl*inst.pipValuePerLot)).toFixed(2) : '—';
+  const rMult = tf.outcome==='win'?(parseFloat(tf.rResult)||0):tf.outcome==='be'?0:-1;
+  const pnl = rMult*riskEur;
+  return `
+  <div class="surface" style="border-color:rgba(45,212,191,.25);gap:12px;display:flex;flex-direction:column">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div><label class="label" style="font-size:11.5px;color:var(--txF)">Symbol</label>
+        <select onchange="tfChange('symbol',this.value)">${Object.keys(INSTRUMENTS).map(k=>`<option ${tf.symbol===k?'selected':''}>${k}</option>`).join('')}</select></div>
+      <div><label class="label" style="font-size:11.5px;color:var(--txF)">Richtung</label>
+        <select onchange="tfChange('direction',this.value)"><option ${tf.direction==='Buy'?'selected':''}>Buy</option><option ${tf.direction==='Sell'?'selected':''}>Sell</option></select></div>
+      <div><label class="label" style="font-size:11.5px;color:var(--txF)">Risiko %</label>
+        <input type="number" step="0.25" value="${tf.riskPct}" onchange="tfChange('riskPct',parseFloat(this.value))"></div>
+      <div><label class="label" style="font-size:11.5px;color:var(--txF)">Stop-Loss (Pips)</label>
+        <input type="number" value="${tf.slPips}" placeholder="z.B. 50" onchange="tfChange('slPips',this.value)"></div>
+    </div>
+    <div style="background:var(--surf);border:1px solid var(--bd);border-radius:9px;padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div><div style="font-size:11px;color:var(--txF)">Risiko in €</div><div class="tnum" style="font-size:16px;font-weight:600;color:var(--loss)">${Math.round(riskEur)} €</div></div>
+      <div><div style="font-size:11px;color:var(--txF)">Vorgeschlagene Lots</div><div class="tnum" style="font-size:16px;font-weight:600;color:var(--ac)">${sugLots}</div></div>
+    </div>
+    <div>
+      <label class="label" style="font-size:11.5px;color:var(--txF)">Ergebnis</label>
+      <div style="display:flex;gap:8px">
+        ${[['win','Win','var(--win)'],['be','Break-even','var(--txD)'],['loss','Loss (−1R)','var(--loss)']].map(([v,l,c])=>`
+          <button onclick="tfChange('outcome','${v}')" style="flex:1;padding:8px;border-radius:8px;font-size:12.5px;font-weight:600;border:1px solid ${tf.outcome===v?c:'var(--bd)'};background:${tf.outcome===v?c+'22':'var(--surf)'};color:${tf.outcome===v?c:'var(--txD)'}">${l}</button>`).join('')}
+      </div>
+    </div>
+    ${tf.outcome==='win'?`<div><label class="label" style="font-size:11.5px;color:var(--txF)">Gewinn in R</label><input type="number" step="0.1" value="${tf.rResult}" placeholder="z.B. 2.0" onchange="tfChange('rResult',this.value)"></div>`:''}
+    <div style="background:var(--surf);border:1px solid var(--bd);border-radius:9px;padding:12px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:12.5px;color:var(--txD)">Ergebnis</span>
+      <span class="tnum" style="font-size:18px;font-weight:700;color:${rMult>=0?'var(--win)':'var(--loss)'}">${fmt(rMult)}R · ${fmtEur(pnl)}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div><label class="label" style="font-size:11.5px;color:var(--txF)">Grade</label>
+        <select onchange="tfChange('grade',this.value)">${['A+','A','B','C','X'].map(g=>`<option ${tf.grade===g?'selected':''}>${g}</option>`).join('')}</select></div>
+      <div><label class="label" style="font-size:11.5px;color:var(--txF)">Emotion</label>
+        <select onchange="tfChange('emotion',this.value)">${['Neutral','Selbstsicher','Frustriert','FOMO','Müde','Gelangweilt','Gestresst'].map(o=>`<option ${tf.emotion===o?'selected':''}>${o}</option>`).join('')}</select></div>
+    </div>
+    <div>
+      <label class="label" style="font-size:13px;font-weight:600;color:var(--warn)">Kritische Frage: Vollständiges SBS?</label>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <button onclick="tfChange('wasValidSBS',true)" style="flex:1;padding:9px;border-radius:8px;font-weight:600;font-size:12.5px;border:1px solid ${tf.wasValidSBS===true?'var(--win)':'var(--bd)'};background:${tf.wasValidSBS===true?'rgba(52,211,153,.15)':'var(--surf)'};color:${tf.wasValidSBS===true?'var(--win)':'var(--txD)'}">Ja, vollständiges SBS</button>
+        <button onclick="tfChange('wasValidSBS',false)" style="flex:1;padding:9px;border-radius:8px;font-weight:600;font-size:12.5px;border:1px solid ${tf.wasValidSBS===false?'var(--loss)':'var(--bd)'};background:${tf.wasValidSBS===false?'rgba(248,113,113,.1)':'var(--surf)'};color:${tf.wasValidSBS===false?'var(--loss)':'var(--txD)'}">Nein, forced</button>
+      </div>
+    </div>
+    <textarea rows="2" placeholder="Reflexion in einem Satz…" onchange="tfChange('reflection',this.value)">${tf.reflection||''}</textarea>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-subtle" onclick="toggleTradeForm()">Abbrechen</button>
+      <button class="btn btn-primary" style="flex:1" onclick="submitTrade()" ${tf.wasValidSBS===null?'disabled':''}>Trade speichern</button>
+    </div>
+  </div>`;
+}
+
+// POST TRADING
+function renderPostTrading(log) {
+  const p = log.postTrading||{};
+  return `
+  <div class="card gap-col">
+    <h3 style="font-size:17px;font-weight:700">📝 Post-Trading Registration</h3>
+    <div><label class="label">Was lief heute gut?</label><textarea id="post-good" rows="3" placeholder="Konkret…">${p.went_well||''}</textarea></div>
+    <div><label class="label">Was hat nicht funktioniert?</label><textarea id="post-bad" rows="3" placeholder="Ehrlich…">${p.didnt_work||''}</textarea></div>
+    <div><label class="label">Heutiges Pattern</label><input id="post-pattern" value="${p.pattern||''}" placeholder="Mein Pattern war…"></div>
+    <div>
+      <label class="label">Discipline-Grade</label>
+      <p class="sub-label">Ausführung, nicht Ergebnis</p>
+      <div class="grade-btns">
+        ${['A+','A','B','C','X'].map(g=>`<button class="grade-btn" onclick="selectGrade('${g}')" style="border-color:${p.dayGrade===g?gradeColor(g):'var(--bd)'};background:${p.dayGrade===g?gradeColor(g)+'22':'var(--surf2)'};color:${p.dayGrade===g?gradeColor(g):'var(--txD)'}">${g}</button>`).join('')}
+      </div>
+    </div>
+    <button class="btn btn-full ${log.postTradingDone?'btn-ghost':'btn-success'}" onclick="completePostTrading()">
+      ${log.postTradingDone?'✓ Post-Trading abgeschlossen':'Post-Trading abschließen'}
+    </button>
+  </div>`;
+}
+
+// EVENING
+function renderEvening(log) {
+  const e = log.evening||{};
+  return `
+  <div class="card gap-col">
+    <h3 style="font-size:17px;font-weight:700">🌙 Evening Reflection</h3>
+    <div><label class="label">Expressive Writing — 5 Min</label><p class="sub-label">Ohne Zensur. Pennebaker 1997.</p><textarea id="eve-write" rows="6" placeholder="Was bewegt mich heute Abend?">${e.expressive||''}</textarea></div>
+    <div><label class="label">3 Dinge, für die ich dankbar bin</label><textarea id="eve-grat" rows="3" placeholder="1. …  2. …  3. …">${e.gratitude||''}</textarea></div>
+    <div><label class="label">Implementation Intention für morgen</label><input id="eve-plan" value="${e.tomorrow||''}" placeholder="Wenn ___, dann ___"></div>
+    ${scaleField('Wie fühlst du dich gerade?',e.endMood,'eve-mood','Letzte Erfassung des Tages.','Furchtbar','Zufrieden')}
+    <button class="btn btn-full ${log.eveningDone?'btn-ghost':'btn-success'}" onclick="completeEvening()">
+      ${log.eveningDone?'✓ Evening abgeschlossen — Tag komplett':'Tag abschließen'}
+    </button>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HISTORY
+// ═══════════════════════════════════════════════════════════════
+function renderHistory() {
+  const at = allTrades();
+  const wins = at.filter(t=>(parseFloat(t.rMultiple)||0)>0).length;
+  const totalR = at.reduce((s,t)=>s+(parseFloat(t.rMultiple)||0),0);
+  const forced = at.filter(t=>!t.wasValidSBS).length;
+  const fRate = at.length ? Math.round(forced/at.length*100) : 0;
+  const wRate = at.length ? Math.round(wins/at.length*100) : 0;
+
+  // Equity data
+  const sorted = [...at].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+  let cum=0;
+  const eqData = sorted.map((t,i)=>{cum+=(parseFloat(t.rMultiple)||0);return{i:i+1,r:parseFloat(cum.toFixed(2))};});
+
+  return `
+  <div class="gap-col">
+    <h2 style="font-size:22px;font-weight:700;letter-spacing:-.02em">Verlauf</h2>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">Trades</div><div class="stat-value tnum">${at.length}</div></div>
+      <div class="stat-card"><div class="stat-label">Win-Rate</div><div class="stat-value tnum" style="color:${wRate>=50?'var(--win)':'var(--txD)'}">${wRate}%</div></div>
+      <div class="stat-card"><div class="stat-label">Gesamt R</div><div class="stat-value tnum" style="color:${totalR>=0?'var(--win)':'var(--loss)'}">${fmt(totalR,1)}R</div></div>
+      <div class="stat-card"><div class="stat-label">Forced</div><div class="stat-value tnum" style="color:${fRate>0?'var(--loss)':'var(--win)'}">${fRate}%</div></div>
+    </div>
+    ${at.length===0?'<div class="card" style="text-align:center;padding:40px;color:var(--txD)">Noch keine Trades dokumentiert. Sobald du loggst, erscheinen hier Statistiken.</div>':renderEquityChart(eqData)}
+    ${renderCalendar()}
+  </div>`;
+}
+
+function renderEquityChart(data) {
+  if (data.length < 2) return '';
+  const w=640, h=200, padL=40, padB=30, padT=16, padR=16;
+  const iW=w-padL-padR, iH=h-padB-padT;
+  const minR=Math.min(...data.map(d=>d.r),0);
+  const maxR=Math.max(...data.map(d=>d.r),0);
+  const range=maxR-minR||1;
+  const xS=(i)=>padL+(i-1)/(data.length-1)*iW;
+  const yS=(r)=>padT+iH-((r-minR)/range)*iH;
+  const pts=data.map(d=>`${xS(d.i).toFixed(1)},${yS(d.r).toFixed(1)}`).join(' ');
+  const y0=yS(0);
+  return `
+  <div class="card">
+    <div style="font-size:13px;font-weight:600;color:var(--txD);margin-bottom:12px">Equity-Kurve (R)</div>
+    <svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto">
+      <line x1="${padL}" y1="${y0.toFixed(1)}" x2="${w-padR}" y2="${y0.toFixed(1)}" stroke="rgba(148,163,184,.2)" stroke-dasharray="4 4"/>
+      <polyline points="${pts}" fill="none" stroke="#2dd4bf" stroke-width="2" stroke-linejoin="round"/>
+      ${data.map(d=>`<circle cx="${xS(d.i).toFixed(1)}" cy="${yS(d.r).toFixed(1)}" r="3" fill="${d.r>=0?'#34d399':'#f87171'}"/>`).join('')}
+    </svg>
+  </div>`;
+}
+
+function renderCalendar() {
+  const now = state.calMonth || new Date();
+  const yr = now.getFullYear(), mo = now.getMonth();
+  const days = new Date(yr,mo+1,0).getDate();
+  const firstDay = new Date(yr,mo,1).getDay();
+  const off = firstDay===0?6:firstDay-1;
+  const mNames=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  const td = today();
+  return `
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <button class="btn btn-ghost btn-sm" onclick="calPrev()">←</button>
+      <h3 style="font-size:15px;font-weight:600">${mNames[mo]} ${yr}</h3>
+      <button class="btn btn-ghost btn-sm" onclick="calNext()">→</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px">
+      ${['Mo','Di','Mi','Do','Fr','Sa','So'].map(d=>`<div style="text-align:center;font-size:11px;color:var(--txF);font-weight:600">${d}</div>`).join('')}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">
+      ${Array(off).fill('<div></div>').join('')}
+      ${Array.from({length:days},(_,i)=>{
+        const day=i+1, date=`${yr}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const log=state.dailyLogs[date]; const isT=date===td;
+        const trades=log?.trades||[], rSum=trades.reduce((s,t)=>s+(parseFloat(t.rMultiple)||0),0);
+        const grade=log?.postTrading?.dayGrade;
+        return `<button onclick="selectCalDay('${date}')" style="aspect-ratio:1;border-radius:7px;padding:3px;font-size:11px;border:1px solid ${state.selectedCalDay===date?'var(--ac)':isT?'rgba(45,212,191,.4)':'var(--bd)'};background:${log?'var(--surf2)':'transparent'};display:flex;flex-direction:column;align-items:flex-start;position:relative">
+          <span class="tnum" style="color:var(--txD)">${day}</span>
+          ${grade?`<span style="position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:${gradeColor(grade)}"></span>`:''}
+          ${trades.length>0?`<span class="tnum" style="font-size:9.5px;color:${rSum>=0?'var(--win)':'var(--loss)'};margin-top:auto">${rSum>=0?'+':''}${rSum.toFixed(1)}R</span>`:''}
+        </button>`;
+      }).join('')}
+    </div>
+    ${state.selectedCalDay?renderDayDetail(state.selectedCalDay):''}
+  </div>`;
+}
+
+function renderDayDetail(date) {
+  const log = state.dailyLogs[date];
+  if(!log) return `<div style="margin-top:14px;padding:16px;background:var(--surf2);border-radius:9px;text-align:center;color:var(--txD);font-size:13px">Keine Dokumentation für ${new Date(date).toLocaleDateString('de-DE')}</div>`;
+  const trades=log.trades||[];
+  const rSum=trades.reduce((s,t)=>s+(parseFloat(t.rMultiple)||0),0);
+  return `
+  <div style="margin-top:14px;padding:14px;background:var(--surf2);border-radius:10px;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <h4 style="font-size:14px;font-weight:600">${new Date(date).toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'})}</h4>
+      ${log.postTrading?.dayGrade?`<span class="tnum" style="font-size:24px;font-weight:700;color:${gradeColor(log.postTrading.dayGrade)}">${log.postTrading.dayGrade}</span>`:''}
+    </div>
+    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stat-card"><div class="stat-label">Trades</div><div class="stat-value tnum">${trades.length}</div></div>
+      <div class="stat-card"><div class="stat-label">R</div><div class="stat-value tnum" style="color:${rSum>=0?'var(--win)':'var(--loss)'}">${fmt(rSum)}R</div></div>
+      <div class="stat-card"><div class="stat-label">Komplett</div><div class="stat-value tnum">${calcCompletion(log)}%</div></div>
+    </div>
+    ${trades.map((t,i)=>renderTradeRow(t,i)).join('')}
+    ${log.postTrading?.went_well?`<div style="font-size:12.5px;color:var(--txD)"><span style="color:var(--ac)">Gut:</span> ${log.postTrading.went_well}</div>`:''}
+    ${log.postTrading?.didnt_work?`<div style="font-size:12.5px;color:var(--txD)"><span style="color:var(--loss)">Nicht gut:</span> ${log.postTrading.didnt_work}</div>`:''}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TOOLS (kompakt)
+// ═══════════════════════════════════════════════════════════════
+function renderTools() {
+  const tab = state.toolsTab||'forced';
+  return `
+  <div class="gap-col">
+    <h2 style="font-size:22px;font-weight:700;letter-spacing:-.02em">Werkzeuge</h2>
+    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">
+      ${[['forced','Forced Setups'],['revenge','Revenge'],['boredom','Boredom'],['protocols','Protokolle'],['breath','Atmen']].map(([id,label])=>`
+        <button class="nav-tab ${tab===id?'active':''}" onclick="setToolsTab('${id}')">${label}</button>`).join('')}
+    </div>
+    ${tab==='forced'    ? renderForcedSetups()   : ''}
+    ${tab==='revenge'   ? renderRevenge()        : ''}
+    ${tab==='boredom'   ? renderBoredom()        : ''}
+    ${tab==='protocols' ? renderProtocols()      : ''}
+    ${tab==='breath'    ? renderBreath()         : ''}
+  </div>`;
+}
+
+function setToolsTab(t) { state.toolsTab=t; render(); }
+
+function renderForcedSetups() {
+  return `
+  <div class="gap-col">
+    <div class="banner banner-accent">
+      <div style="font-size:16px;font-weight:500;margin-bottom:6px">Forced Setups — die unsichtbare Falle</div>
+      <p style="font-size:13px;color:var(--txD);line-height:1.6">Du siehst etwas, das fast wie dein Setup aussieht, weißt im Hinterkopf, dass es nicht passt, und gehst trotzdem rein. Forcing ist kein Charakterfehler — es ist das Ergebnis von fünf gleichzeitig aktiven kognitiven Mechanismen.</p>
+    </div>
+    <div class="card">
+      <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">Setup Verification Protocol (60 Sek)</h3>
+      ${['Zähle laut die 5 SBS-Punkte. Ein Punkt nicht klar zeigbar — kein Trade.',
+         'Devil\'s Advocate: "Was spricht GEGEN diesen Trade?" Mindestens zwei Gegenargumente.',
+         '60-Sekunden-Regel: Timer starten, kein Trade. Echte Setups verschwinden nicht in 60s.'
+      ].map((s,i)=>taskItem(`force-${i}`,`Schritt ${i+1}: ${s}`)).join('')}
+    </div>
+    <div class="card">
+      <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">Wenn-Dann-Skripte</h3>
+      ${ifThenList([
+        {w:'Setup sieht unklar aus',d:'5 Punkte laut zählen. Ein Punkt fehlt → Screenshot statt Trade.'},
+        {w:'Ich sitze lange am Chart ohne Trade',d:'Die Zeit ist sunk cost. Schlechter Trade macht sie nicht wertvoll.'},
+        {w:'Bauchgefühl: "Ich weiß es einfach"',d:'60-Sekunden-Protokoll + zwei Gegenargumente suchen.'},
+        {w:'"Ich muss heute einen Trade machen"',d:'Identity Reframe: "Ich muss heute ein Setup abwarten."'},
+      ])}
+    </div>
+  </div>`;
+}
+
+function renderRevenge() {
+  return `
+  <div class="gap-col">
+    <div class="banner banner-danger">
+      <div style="font-size:16px;font-weight:500;margin-bottom:6px">Revenge Trading</div>
+      <p style="font-size:13px;color:var(--txD);line-height:1.6">Eine vorhersagbare neurochemische Kaskade: Amygdala-Spike → Cortisol (Peak nach 15 Min) → PFC reduziert um 20–30% → Dopamin-Craving. Der nächste Trade wirkt zwingend — ist es aber nicht.</p>
+    </div>
+    <div class="card">
+      <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">30-30-30 Protokoll</h3>
+      ${taskItem('rev1','Sofort nach SL: MetaTrader schließen. Trade dokumentieren.')}
+      ${taskItem('rev2','30 Sek Physiological Sigh — drei Wiederholungen.')}
+      ${taskItem('rev3','30 Min keine Charts. Bewegung oder frische Luft.')}
+      ${taskItem('rev4','30 Sek schreiben: Was triggert mich JETZT zum nächsten Trade?')}
+    </div>
+  </div>`;
+}
+
+function renderBoredom() {
+  return `
+  <div class="gap-col">
+    <div class="banner banner-warn">
+      <div style="font-size:16px;font-weight:500;margin-bottom:6px">Boredom & Tilt</div>
+      <p style="font-size:13px;color:var(--txD);line-height:1.6">Boredom ist ein aktiver dopaminerger Hunger-Zustand. Dein Gehirn sucht Stimulation und erzeugt Handlungsdrang. Charts außerhalb des Fensters öffnen triggert dieselben Sucht-Schaltkreise wie Trading.</p>
+    </div>
+    <div class="card">
+      <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">20-Minuten-Regel</h3>
+      ${taskItem('bored1','20 Push-Ups oder Squats. Intensivste Methode gegen Dopamin-Craving.')}
+      ${taskItem('bored2','10 Min schnelles Gehen. Endorphine + Distanz vom Bildschirm.')}
+      ${taskItem('bored3','Imge anrufen — soziale Verbindung als Alternative.')}
+      ${taskItem('bored4','10 Seiten Buch — analog, nicht Bildschirm.')}
+    </div>
+    <div class="card">
+      <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">Sucht-Sprache erkennen</h3>
+      ${['"Ich schau nur kurz"','"Nur eine Analyse, kein Trade"','"Diesmal weiß ich es"',
+         '"Ich muss den Loss zurückholen"','"Mir ist langweilig, ein Trade wäre cool"'].map(s=>`
+        <div style="display:flex;gap:9px;padding:9px;background:var(--surf2);border-radius:8px;margin-bottom:6px;font-size:12.5px;align-items:center">
+          <span style="color:var(--warn)">⚠</span> <span style="color:var(--tx)">${s}</span>
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function renderProtocols() {
+  const protocols = [
+    {t:'Nach einem Verlust',steps:['MetaTrader schließen — nicht minimieren.','Trade dokumentieren — ehrlicher Grade und Emotion.','30 Sek Physiological Sigh, drei Wiederholungen.','30 Min keine Charts. Bewegung.','Erst nach 30 Min entscheiden, ob Trading weitergeht.']},
+    {t:'Nach zwei Verlusten',steps:['Trading-Tag ist beendet — unabhängig von Uhrzeit.','Laptop zu, MT schließen, Handy vom Schreibtisch.','Den Raum mindestens 60 Min verlassen.','Im Log unter "Pattern" notieren.','Morgen frischer Start. Kein Aufholen.']},
+    {t:'Drang außerhalb 08:30–12:00',steps:['Erkennen und benennen: "Das ist Boredom — nicht Setup."','20-Min-Alternative VOR jedem Chart-Blick.','Nach 20 Min: Ist der Drang noch da? Meist nicht.','Was du getradet hättest — notieren und am nächsten Tag prüfen.']},
+  ];
+  return `<div class="gap-col">${protocols.map(p=>`
+    <div class="card">
+      <h3 style="font-size:14.5px;font-weight:700;margin-bottom:12px">🛡 Protokoll: ${p.t}</h3>
+      ${p.steps.map((s,i)=>`<div style="display:flex;gap:10px;font-size:12.5px;color:var(--txD);line-height:1.5;margin-bottom:8px"><span class="tnum" style="color:var(--ac);font-weight:700;flex-shrink:0">${i+1}</span>${s}</div>`).join('')}
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderBreath() {
+  return `
+  <div class="card gap-col" style="text-align:center">
+    <h3 style="font-size:16px;font-weight:600">Box Breathing 4-4-4-4</h3>
+    <p style="font-size:13px;color:var(--txD);line-height:1.6">Aktiviert Vagus-Nerv in 60–90 Sekunden. Vor jedem Entry, nach jedem Loss.</p>
+    <div id="breath-circle" style="width:150px;height:150px;border-radius:50%;border:3px solid var(--bd);margin:0 auto;display:flex;align-items:center;justify-content:center;transition:transform 4s ease-in-out,border-color .4s">
+      <div>
+        <div id="breath-label" style="font-size:18px;font-weight:700">Start</div>
+        <div id="breath-sub" style="font-size:11px;color:var(--txF)">Box 4-4-4-4</div>
+      </div>
+    </div>
+    <button id="breath-btn" class="btn btn-primary" onclick="startBreath()">Starten</button>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// KNOWLEDGE
+// ═══════════════════════════════════════════════════════════════
+function renderKnowledge() {
+  const tab = state.knowledgeTab||'sbs';
+  return `
+  <div class="gap-col">
+    <h2 style="font-size:22px;font-weight:700;letter-spacing:-.02em">Wissen</h2>
+    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">
+      ${[['sbs','SBS-Modell'],['discipline','Discipline Code'],['science','Wissenschaft']].map(([id,label])=>`
+        <button class="nav-tab ${tab===id?'active':''}" onclick="setKnowledgeTab('${id}')">${label}</button>`).join('')}
+    </div>
+    ${tab==='sbs' ? renderSBS() : tab==='discipline' ? renderDiscipline() : renderScience()}
+  </div>`;
+}
+
+function setKnowledgeTab(t) { state.knowledgeTab=t; render(); }
+
+function renderSBS() {
+  const steps = [
+    {n:'1',t:'Push',d:'Initiale impulsive Bewegung in eine Richtung.'},
+    {n:'2',t:'Pullback',d:'Korrektur gegen die Push-Richtung.'},
+    {n:'3',t:'Deeper Push',d:'Fortsetzung der ursprünglichen Richtung, neues Extrem.'},
+    {n:'4',t:'Sweep von Punkt 2',d:'Liquiditätsabgriff am Pullback-Level.'},
+    {n:'5',t:'Entry / Continuation',d:'Einstieg nach bestätigtem Sweep.'},
+  ];
+  return `
+  <div class="gap-col">
+    <div class="banner banner-accent">
+      <div style="font-size:16px;font-weight:500;margin-bottom:6px">Simplicity Edge</div>
+      <p style="font-size:13px;color:var(--txD);line-height:1.6">Dein Vorsprung ist nicht mehr Wissen — sondern weniger. Fünf Punkte, ein Timeframe (M1), ein Fenster (08:30–12:00). Was nicht in diesen fünf Punkten steht, ist Rauschen.</p>
+    </div>
+    <div class="card gap-col">
+      ${steps.map(s=>`
+        <div style="display:flex;gap:12px;align-items:center">
+          <div style="width:30px;height:30px;border-radius:7px;background:var(--acDim);border:1px solid rgba(45,212,191,.3);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--ac);flex-shrink:0;font-family:var(--mono)">${s.n}</div>
+          <div><div style="font-size:13.5px;font-weight:600">${s.t}</div><div style="font-size:12px;color:var(--txF)">${s.d}</div></div>
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function renderDiscipline() {
+  const rules = [
+    'Nur das vollständige SBS-Setup mit allen fünf Punkten.',
+    'Nur M1, nur Mo–Fr 08:30–12:00.',
+    '1 Setup = 1 Trade. Maximal 2 Trades pro Tag.',
+    'Nach 2 Verlusten ist der Tag beendet — kompromisslos.',
+    'Bei aktivem Trigger morgens kein Trading.',
+    'Risk per SL-Distanz normalisiert — nie per Bauchgefühl.',
+    'Jeder Trade wird sofort und ehrlich dokumentiert.',
+    'Boredom-Drang außerhalb Session: 20-Min-Alternative zuerst.',
+  ];
+  return `
+  <div class="card gap-col">
+    <h3 style="font-size:15px;font-weight:600">Die acht inviolablen Regeln</h3>
+    ${rules.map((r,i)=>`
+      <div style="display:flex;gap:11px;background:var(--surf2);border:1px solid var(--bd);border-radius:9px;padding:12px">
+        <div style="width:24px;height:24px;border-radius:6px;background:var(--acDim);color:var(--ac);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0;font-family:var(--mono)">${i+1}</div>
+        <span style="font-size:13px;line-height:1.5">${r}</span>
+      </div>`).join('')}
+  </div>`;
+}
+
+function renderScience() {
+  const studies = [
+    {t:'Expressive Writing (Pennebaker, 1997)',d:'15–20 Min freies Schreiben über drei Wochen verbessert mentale Gesundheit messbar. → Evening Reflection'},
+    {t:'Implementation Intentions (Gollwitzer, 1999)',d:'Meta-Analyse 94 Studien: Wenn-Dann-Pläne verdoppeln die Erfolgsrate. → Morning & Evening Intentionen'},
+    {t:'Dopamin & Anticipation (Schultz, 1998)',d:'Dopamin in der Erwartung, nicht bei der Belohnung. Peak klingt nach 15–20 Min ab. → 20-Min-Regel'},
+    {t:'Action Bias (Bar-Eli, 2007)',d:'Nichts-Tun fühlt sich falsch an, auch wenn es richtig ist. → Geduld als aktive Strategie'},
+    {t:'Physiological Sigh (Balban, 2023)',d:'Stanford Cell Reports: Schnellste Stress-Reduktion aller Atemtechniken. → Pre-Entry & Post-Loss'},
+  ];
+  return `
+  <div class="gap-col">
+    ${studies.map(s=>`
+      <div class="card">
+        <h4 style="font-size:13.5px;font-weight:600;color:var(--ac);margin-bottom:6px">${s.t}</h4>
+        <p style="font-size:12.5px;color:var(--txD);line-height:1.6;margin:0">${s.d}</p>
+      </div>`).join('')}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ROADMAP
+// ═══════════════════════════════════════════════════════════════
+function renderRoadmap() {
+  const at = allTrades();
+  const days = Object.keys(state.dailyLogs).length;
+  const totalR = at.reduce((s,t)=>s+(parseFloat(t.rMultiple)||0),0);
+  const fRate = at.length ? Math.round(at.filter(t=>!t.wasValidSBS).length/at.length*100) : 0;
+  const stageOrder = ['demo','challenge1','challenge2','funded'];
+  const curIdx = stageOrder.indexOf(state.account.stage||'demo');
+
+  return `
+  <div class="gap-col">
+    <h2 style="font-size:22px;font-weight:700;letter-spacing:-.02em">Dein Weg</h2>
+
+    <div>
+      <div class="section-title">Die Prop-Reise</div>
+      <div class="gap-col">
+        ${Object.values(STAGE_DEFAULTS).map((s,i)=>`
+          <div class="card" style="border-color:${i===curIdx?s.key==='funded'?'rgba(52,211,153,.5)':'rgba(45,212,191,.5)':i<curIdx?'rgba(52,211,153,.25)':'var(--bd)'}">
+            <div style="display:flex;align-items:flex-start;gap:13px">
+              <div style="width:30px;height:30px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${i<curIdx?'var(--win)':i===curIdx?'var(--ac)':'var(--surf2)'};border:1px solid ${i<curIdx?'var(--win)':i===curIdx?'var(--ac)':'var(--bd)'};color:${i<=curIdx?'#04111a':'var(--txF)'};font-weight:700;font-size:12px;font-family:var(--mono)">
+                ${i<curIdx?'✓':i+1}
+              </div>
+              <div style="flex:1">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <h3 style="font-size:14.5px;font-weight:600;color:${i===curIdx?(s.key==='funded'?'var(--win)':'var(--ac)'):'var(--tx)'}">${s.label}</h3>
+                  ${i===curIdx?`<span style="font-size:10px;font-weight:700;color:var(--ac);padding:2px 7px;border-radius:6px;background:var(--acDim);text-transform:uppercase">Jetzt</span>`:''}
+                </div>
+                <p style="font-size:12.5px;color:var(--txD);line-height:1.55;margin-top:4px">${s.note}</p>
+              </div>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Disziplin-Meilensteine</div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Tage</div><div class="stat-value tnum">${days}</div></div>
+        <div class="stat-card"><div class="stat-label">Gesamt R</div><div class="stat-value tnum" style="color:${totalR>=0?'var(--win)':'var(--loss)'}">${fmt(totalR,1)}R</div></div>
+        <div class="stat-card"><div class="stat-label">Forced</div><div class="stat-value tnum" style="color:${fRate<10?'var(--win)':'var(--loss)'}">${fRate}%</div></div>
+      </div>
+      <div class="gap-col" style="margin-top:12px">
+        ${[
+          {label:'14 Tage dokumentiert', done:days>=14, detail:'Das Fundament. Ohne Daten kein Muster.'},
+          {label:'Forced-Quote unter 10%', done:at.length>=10&&fRate<10, detail:'Target: konstant unter 10% Forced Setups.'},
+          {label:'Positive R über 30 Trades', done:at.length>=30&&totalR>0, detail:'Statistischer Beweis des Edges.'},
+          {label:'Trading Playbook erstellt', done:false, detail:'Entsteht, wenn die Datenbasis steht.'},
+        ].map((m,i)=>`
+          <div class="card" style="border-color:${m.done?'rgba(52,211,153,.35)':'var(--bd)'}">
+            <div style="display:flex;align-items:flex-start;gap:13px">
+              <div style="width:28px;height:28px;border-radius:7px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${m.done?'var(--win)':'var(--surf2)'};border:1px solid ${m.done?'var(--win)':'var(--bd)'};font-weight:700;color:${m.done?'#04130c':'var(--txF)'};font-size:11px">${m.done?'✓':i+1}</div>
+              <div>
+                <h3 style="font-size:14px;font-weight:600;color:${m.done?'var(--win)':'var(--tx)'};margin-bottom:3px">${m.label}</h3>
+                <p style="font-size:12.5px;color:var(--txD);line-height:1.5;margin:0">${m.detail}</p>
+              </div>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HELPER RENDERERS
+// ═══════════════════════════════════════════════════════════════
+function scaleField(label, value, id, sub, l1, l2) {
+  return `
+  <div>
+    <label class="label">${label}</label>
+    ${sub?`<p class="sub-label">${sub}</p>`:''}
+    <div class="scale-btns">
+      ${Array.from({length:10},(_,i)=>i+1).map(n=>`
+        <button class="scale-btn ${value===n?'active':''}" onclick="onScaleChange('${id}',${n})">${n}</button>`).join('')}
+    </div>
+    ${(l1&&l2)?`<div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--txF);margin-top:4px"><span>${l1}</span><span>${l2}</span></div>`:''}
+  </div>`;
+}
+
+function ynField(label, id, value) {
+  return `
+  <div style="margin-bottom:12px">
+    <label class="label" style="font-size:13px">${label}</label>
+    <div class="yn-btns">
+      <button class="yn-btn yes ${value==='yes'?'active':''}" onclick="onYNChange('${id}','yes')">Ja</button>
+      <button class="yn-btn no ${value==='no'?'active':''}" onclick="onYNChange('${id}','no')">Nein</button>
+    </div>
+  </div>`;
+}
+
+function taskItem(id, text) {
+  const checked = state.tasks?.[id]||false;
+  return `
+  <button class="task-item ${checked?'checked':''}" onclick="toggleTask('${id}')" style="margin-bottom:6px">
+    <div class="task-check ${checked?'checked':''}">${checked?'<span style="color:#04111a;font-size:11px">✓</span>':''}</div>
+    <span style="font-size:13px;line-height:1.5;${checked?'text-decoration:line-through;color:var(--txD)':''}">${text}</span>
+  </button>`;
+}
+
+function ifThenList(rules) {
+  return rules.map(r=>`
+    <div class="surface" style="margin-bottom:8px">
+      <div style="font-size:10.5px;color:var(--ac);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Wenn</div>
+      <div style="font-size:13px;margin-bottom:8px">${r.w}</div>
+      <div style="font-size:10.5px;color:var(--win);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Dann</div>
+      <div style="font-size:13px">${r.d}</div>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EVENT HANDLERS
+// ═══════════════════════════════════════════════════════════════
+function attachEvents() {}
+
+function toggleTask(id) {
+  state.tasks = state.tasks||{};
+  state.tasks[id] = !state.tasks[id];
+  render();
+}
+
+function onScaleChange(id, val) {
+  const parts = id.split('-');
+  if(parts[0]==='morning') {
+    const log = todayLog();
+    const morning = log.morning||{};
+    morning[parts[1]] = val;
+    saveLog(today(), { ...log, morning });
+  } else if(parts[0]==='eve') {
+    const log = todayLog();
+    const evening = log.evening||{};
+    evening[parts[1]] = val;
+    saveLog(today(), { ...log, evening });
+  }
+}
+
+function onYNChange(id, val) {
+  const log = todayLog();
+  if(id.startsWith('pre-')) {
+    const pre = log.preTrading||{};
+    pre[id.replace('pre-','')] = val;
+    saveLog(today(), { ...log, preTrading: pre });
+  }
+}
+
+function onMorningChange() {
+  const log = todayLog();
+  const morning = log.morning||{};
+  const triggers = {};
+  ['streit','schlaf','business','loss','zwang'].forEach(id => {
+    const el = document.getElementById(`trigger-${id}`);
+    if(el) triggers[id] = el.checked;
+  });
+  morning.triggers = triggers;
+  const int1 = document.getElementById('morning-intention');
+  const int2 = document.getElementById('morning-intention2');
+  if(int1) morning.intention = int1.value;
+  if(int2) morning.intention2 = int2.value;
+  saveLog(today(), { ...log, morning });
+}
+
+function completeMorning() {
+  const log = todayLog();
+  const morning = log.morning||{};
+  const int1 = document.getElementById('morning-intention');
+  const int2 = document.getElementById('morning-intention2');
+  if(int1) morning.intention = int1.value;
+  if(int2) morning.intention2 = int2.value;
+  const triggers = {};
+  ['streit','schlaf','business','loss','zwang'].forEach(id => {
+    const el = document.getElementById(`trigger-${id}`);
+    if(el) triggers[id] = el.checked;
+  });
+  morning.triggers = triggers;
+  if(!morning.sleep||!morning.stress||!morning.energy||!morning.intention) {
+    alert('Bitte Schlaf, Stress, Energie und Intention ausfüllen.');
+    return;
+  }
+  saveLog(today(), { ...log, morning, morningDone: true });
+}
+
+function completePreTrading() {
+  const log = todayLog();
+  const pre = log.preTrading||{};
+  const exp = document.getElementById('pre-expected');
+  if(exp) pre.expectedSetup = exp.value;
+  if(!pre.q1||!pre.q2||!pre.q3||!pre.expectedSetup) {
+    alert('Bitte alle Clarity-Check-Fragen und das erwartete Setup ausfüllen.');
+    return;
+  }
+  saveLog(today(), { ...log, preTrading: pre, preTradingDone: true });
+}
+
+function selectGrade(g) {
+  const log = todayLog();
+  const post = log.postTrading||{};
+  post.dayGrade = g;
+  saveLog(today(), { ...log, postTrading: post });
+}
+
+function completePostTrading() {
+  const log = todayLog();
+  const post = log.postTrading||{};
+  const good = document.getElementById('post-good');
+  const bad  = document.getElementById('post-bad');
+  const pat  = document.getElementById('post-pattern');
+  if(good) post.went_well   = good.value;
+  if(bad)  post.didnt_work  = bad.value;
+  if(pat)  post.pattern     = pat.value;
+  if(!post.went_well||!post.didnt_work||!post.pattern||!post.dayGrade) {
+    alert('Bitte alle Felder und den Grade ausfüllen.');
+    return;
+  }
+  saveLog(today(), { ...log, postTrading: post, postTradingDone: true });
+}
+
+function completeEvening() {
+  const log = todayLog();
+  const evening = log.evening||{};
+  const w = document.getElementById('eve-write');
+  const g = document.getElementById('eve-grat');
+  const p = document.getElementById('eve-plan');
+  if(w) evening.expressive = w.value;
+  if(g) evening.gratitude  = g.value;
+  if(p) evening.tomorrow   = p.value;
+  if(!evening.expressive||!evening.gratitude||!evening.tomorrow) {
+    alert('Bitte Writing, Dankbarkeit und Intention ausfüllen.');
+    return;
+  }
+  saveLog(today(), { ...log, evening, eveningDone: true });
+}
+
+// Trade Form
+function toggleTradeForm() {
+  state.showTradeForm = !state.showTradeForm;
+  if(state.showTradeForm) state.tradeForm = { symbol:'XAUUSD', direction:'Buy', riskPct:1, slPips:'', outcome:'win', rResult:'', grade:'A', emotion:'Neutral', wasValidSBS:null, reflection:'' };
+  render();
+}
+
+function tfChange(key, val) {
+  state.tradeForm = { ...(state.tradeForm||{}), [key]: val };
+  render();
+}
+
+function submitTrade() {
+  const tf = state.tradeForm||{};
+  if(tf.wasValidSBS===null) return;
+  const inst = INSTRUMENTS[tf.symbol]||INSTRUMENTS.EURUSD;
+  const riskEur = (state.account.size||100000)*(tf.riskPct/100);
+  const sl = parseFloat(tf.slPips)||0;
+  const sugLots = sl>0 ? (riskEur/(sl*inst.pipValuePerLot)) : 0;
+  const rMult = tf.outcome==='win'?(parseFloat(tf.rResult)||0):tf.outcome==='be'?0:-1;
+  const pnl = rMult*riskEur;
+  const trade = {
+    ...tf, id: Date.now(),
+    time: new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}),
+    rMultiple: rMult, pnl, riskEur, suggestedLots: sugLots
+  };
+  const log = todayLog();
+  const trades = [...(log.trades||[]), trade];
+  saveLog(today(), { ...log, trades });
+  saveTrade(trade);
+  state.showTradeForm = false;
+  state.tradeForm = null;
+  render();
+}
+
+function removeTrade(id) {
+  if(!confirm('Trade löschen?')) return;
+  const log = todayLog();
+  const trades = (log.trades||[]).filter(t=>t.id!==id);
+  saveLog(today(), { ...log, trades });
+  deleteTradeRemote(id);
+}
+
+// Calendar
+function calPrev() { state.calMonth = new Date((state.calMonth||new Date()).getFullYear(),(state.calMonth||new Date()).getMonth()-1); render(); }
+function calNext() { state.calMonth = new Date((state.calMonth||new Date()).getFullYear(),(state.calMonth||new Date()).getMonth()+1); render(); }
+function selectCalDay(d) { state.selectedCalDay = state.selectedCalDay===d?null:d; render(); }
+
+// Breathing
+let breathTimer=null;
+function startBreath() {
+  if(breathTimer) { clearInterval(breathTimer); breathTimer=null; document.getElementById('breath-btn').textContent='Starten'; document.getElementById('breath-label').textContent='Start'; document.getElementById('breath-circle').style.transform='scale(1)'; document.getElementById('breath-circle').style.borderColor='var(--bd)'; return; }
+  const phases=[{label:'Einatmen',dur:4000,scale:1.15,color:'var(--ac)'},{label:'Halten',dur:4000,scale:1.15,color:'var(--warn)'},{label:'Ausatmen',dur:4000,scale:0.85,color:'#a78bfa'},{label:'Halten',dur:4000,scale:0.85,color:'var(--warn)'}];
+  let i=0;
+  const tick=()=>{
+    const p=phases[i%phases.length];
+    document.getElementById('breath-label').textContent=p.label;
+    document.getElementById('breath-circle').style.transform=`scale(${p.scale})`;
+    document.getElementById('breath-circle').style.borderColor=p.color;
+    i++;
+  };
+  tick();
+  breathTimer=setInterval(tick,4000);
+  document.getElementById('breath-btn').textContent='Stoppen';
+}
+
+// FAB
+let fabOpen=false;
+function fabToggle() {
+  fabOpen=!fabOpen;
+  document.getElementById('fab').textContent=fabOpen?'×':'+';
+  if(fabOpen) { state.showTradeForm=true; render(); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+async function init() {
+  await loadAll();
+  document.getElementById('loading-overlay').style.display='none';
+  document.getElementById('app').style.display='flex';
+  document.getElementById('fab').style.display='flex';
+  render();
+}
+
+init();
+</script>
+</body>
+</html>

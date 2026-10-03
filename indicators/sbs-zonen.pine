@@ -1,0 +1,223 @@
+//@version=6
+indicator("SBS Supply & Demand (M15 Bias, M1 Entry)", shorttitle = "SBS Zonen", overlay = true, max_boxes_count = 500, max_lines_count = 500, max_labels_count = 500)
+
+// Regel (Nassim):
+// Supply = die letzten grünen Kerzen vor einer roten Bewegung, die deren Tief bricht.
+// Demand = die letzten roten Kerzen vor einer grünen Bewegung, die deren Hoch bricht.
+// Bias kommt aus M15. A+ = M1-Zone liegt in einer frischen M15-Zone gleicher Richtung.
+// Einstieg bei 50 % der M1-Zone, Stop hinter der Zone, Ziel in R.
+
+// ── Einstellungen ───────────────────────────────────────────────
+htf        = input.timeframe("15", "Bias-Zeiteinheit", group = "Zonen")
+useWick    = input.bool(true, "Zone mit Dochten (aus = nur Körper)", group = "Zonen")
+closeBreak = input.bool(true, "Bruch erst per Schlusskurs", group = "Zonen")
+maxZ       = input.int(8, "Max. Zonen je Zeiteinheit", minval = 1, maxval = 50, group = "Zonen")
+hideBroken = input.bool(true, "Gebrochene Zonen ausblenden", group = "Zonen")
+onlyAplus  = input.bool(false, "Auf M1 nur A+-Zonen zeigen", group = "Setup")
+bufPts     = input.float(0.0, "Stop-Puffer hinter der Zone (Preis)", minval = 0, step = 0.1, group = "Setup")
+rrr        = input.float(3.0, "Ziel in R", minval = 0.5, step = 0.5, group = "Setup")
+
+RED   = #F04438
+GREEN = #3FCF6E
+DIM   = color.new(color.gray, 85)
+
+// ── Zonen-Erkennung (läuft auf jeder Zeiteinheit gleich) ────────
+f_zones(bool wick, bool brkClose) =>
+    bool up     = close > open
+    bool dn     = close < open
+    bool upPrev = up[1]
+    bool dnPrev = dn[1]
+    float bHi   = wick ? high : math.max(open, close)
+    float bLo   = wick ? low : math.min(open, close)
+
+    var float sHi = na
+    var float sLo = na
+    var int   sT  = na
+    var bool  sOn = false
+    var float dHi = na
+    var float dLo = na
+    var int   dT  = na
+    var bool  dOn = false
+    bool newS = false
+    bool newD = false
+
+    // Kandidat Supply: die laufende Serie grüner Kerzen
+    if up
+        if upPrev and sOn
+            sHi := math.max(sHi, bHi)
+            sLo := math.min(sLo, bLo)
+        else
+            sHi := bHi
+            sLo := bLo
+            sT  := time
+            sOn := true
+
+    // Kandidat Demand: die laufende Serie roter Kerzen
+    if dn
+        if dnPrev and dOn
+            dHi := math.max(dHi, bHi)
+            dLo := math.min(dLo, bLo)
+        else
+            dHi := bHi
+            dLo := bLo
+            dT  := time
+            dOn := true
+
+    float pDn = brkClose ? close : low
+    float pUp = brkClose ? close : high
+    if sOn and not up and pDn < sLo
+        newS := true
+        sOn  := false
+    if dOn and not dn and pUp > dHi
+        newD := true
+        dOn  := false
+
+    [newS, sHi, sLo, sT, newD, dHi, dLo, dT]
+
+// Höhere Zeiteinheit ohne Repainting: nur abgeschlossene Kerzen
+f_htf(bool wick, bool brkClose) =>
+    [a, b, c, d, e, f, g, h] = f_zones(wick, brkClose)
+    [a[1], b[1], c[1], d[1], e[1], f[1], g[1], h[1], close[1]]
+
+[lNewS, lSHi, lSLo, lST, lNewD, lDHi, lDLo, lDT] = f_zones(useWick, closeBreak)
+[hNewS, hSHi, hSLo, hST, hNewD, hDHi, hDLo, hDT, hClose] = request.security(syminfo.tickerid, htf, f_htf(useWick, closeBreak), lookahead = barmerge.lookahead_on)
+bool htfOk = timeframe.in_seconds(htf) > timeframe.in_seconds()
+
+// ── Zonen-Objekte ───────────────────────────────────────────────
+type Zone
+    box   bx
+    line  mid
+    label lb
+    float top
+    float bot
+    bool  sup
+    bool  aplus = false
+    bool  used  = false
+    bool  dead  = false
+    int   born
+
+var array<Zone> hz = array.new<Zone>()
+var array<Zone> lz = array.new<Zone>()
+var int lastHS = na
+var int lastHD = na
+
+f_make(float top, float bot, int t, bool sup, bool isHtf) =>
+    color base = sup ? RED : GREEN
+    color fill = color.new(base, isHtf ? 88 : 72)
+    color edge = color.new(base, isHtf ? 40 : 20)
+    box b = box.new(left = t, top = top, right = time, bottom = bot, xloc = xloc.bar_time, extend = extend.right, border_color = edge, border_width = isHtf ? 2 : 1, bgcolor = fill)
+    float m = (top + bot) / 2
+    line ln = line.new(t, m, time, m, xloc = xloc.bar_time, extend = extend.right, color = edge, style = line.style_dashed)
+    Zone.new(bx = b, mid = ln, top = top, bot = bot, sup = sup, born = bar_index)
+
+f_kill(Zone z) =>
+    if not na(z.bx)
+        box.delete(z.bx)
+        z.bx := na
+    if not na(z.mid)
+        line.delete(z.mid)
+        z.mid := na
+    if not na(z.lb)
+        label.delete(z.lb)
+        z.lb := na
+    true
+
+f_push(array<Zone> arr, Zone z) =>
+    array.push(arr, z)
+    if array.size(arr) > maxZ
+        Zone old = array.shift(arr)
+        f_kill(old)
+    true
+
+f_close(Zone z) =>
+    z.dead := true
+    if hideBroken
+        f_kill(z)
+    else if not na(z.bx)
+        box.set_extend(z.bx, extend.none)
+        box.set_right(z.bx, time)
+        box.set_bgcolor(z.bx, DIM)
+        box.set_border_color(z.bx, DIM)
+        line.set_extend(z.mid, extend.none)
+        line.set_x2(z.mid, time)
+    true
+
+f_inHtf(float top, float bot, bool sup) =>
+    bool hit = false
+    if array.size(hz) > 0
+        for z in hz
+            if not z.dead and z.sup == sup and top >= z.bot and bot <= z.top
+                hit := true
+                break
+    hit
+
+f_bias() =>
+    int b = 0
+    int n = array.size(hz)
+    if n > 0
+        for i = n - 1 to 0
+            Zone z = array.get(hz, i)
+            if not z.dead
+                b := z.sup ? -1 : 1
+                break
+    b
+
+f_ltf(float top, float bot, int t, bool sup) =>
+    bool ap = htfOk and f_inHtf(top, bot, sup)
+    if ap or not onlyAplus
+        Zone z = f_make(top, bot, t, sup, false)
+        z.aplus := ap
+        color base = sup ? RED : GREEN
+        if ap
+            box.set_border_width(z.bx, 2)
+            float e  = (top + bot) / 2
+            float sl = sup ? top + bufPts : bot - bufPts
+            float r  = math.abs(sl - e)
+            float tp = sup ? e - rrr * r : e + rrr * r
+            string txt = "A+ " + (sup ? "Short" : "Long") + "\nEntry " + str.tostring(e, format.mintick) + "\nSL " + str.tostring(sl, format.mintick) + "  (" + str.tostring(r, "#.##") + " Pkt)" + "\nTP " + str.tostring(tp, format.mintick) + "  (" + str.tostring(rrr, "#.#") + "R)"
+            z.lb := label.new(x = time, y = sup ? top : bot, text = txt, xloc = xloc.bar_time, style = sup ? label.style_label_down : label.style_label_up, color = color.new(base, 10), textcolor = color.white, size = size.small)
+        else
+            box.set_bgcolor(z.bx, color.new(base, 90))
+            box.set_border_color(z.bx, color.new(base, 70))
+        f_push(lz, z)
+    true
+
+// ── M15-Zonen anlegen und pflegen ───────────────────────────────
+if htfOk
+    if hNewS and (na(lastHS) or hST != lastHS)
+        lastHS := hST
+        f_push(hz, f_make(hSHi, hSLo, hST, true, true))
+    if hNewD and (na(lastHD) or hDT != lastHD)
+        lastHD := hDT
+        f_push(hz, f_make(hDHi, hDLo, hDT, false, true))
+    if array.size(hz) > 0
+        for z in hz
+            if not z.dead and ((z.sup and hClose > z.top) or (not z.sup and hClose < z.bot))
+                f_close(z)
+
+// ── M1-Zonen anlegen und pflegen ────────────────────────────────
+if lNewS
+    f_ltf(lSHi, lSLo, lST, true)
+if lNewD
+    f_ltf(lDHi, lDLo, lDT, false)
+
+if array.size(lz) > 0
+    for z in lz
+        if not z.dead and bar_index > z.born
+            float m = (z.top + z.bot) / 2
+            // Erster Test der 50 %-Linie: Einstieg, danach ist die Zone nicht mehr frisch
+            if not z.used and (z.sup ? high >= m : low <= m)
+                z.used := true
+                if not na(z.bx)
+                    box.set_border_style(z.bx, line.style_dotted)
+                if z.aplus
+                    alert("SBS A+ " + (z.sup ? "Short" : "Long") + " " + syminfo.ticker + ": 50 % erreicht bei " + str.tostring(m, format.mintick), alert.freq_once_per_bar)
+            if (z.sup and close > z.top) or (not z.sup and close < z.bot)
+                f_close(z)
+
+// ── Bias-Anzeige ────────────────────────────────────────────────
+var table tb = table.new(position.top_right, 1, 1, bgcolor = color.new(color.black, 20))
+if barstate.islast
+    int b = f_bias()
+    string txt = not htfOk ? "Chart muss kleiner als " + htf + " sein" : b == -1 ? "Bias " + htf + ": SHORT" : b == 1 ? "Bias " + htf + ": LONG" : "Bias " + htf + ": keiner"
+    table.cell(tb, 0, 0, txt, text_color = b == -1 ? RED : b == 1 ? GREEN : color.gray, text_size = size.normal)
